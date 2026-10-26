@@ -886,6 +886,7 @@ If you use this code in academic work, please cite it as:
   note      = {Reference implementation with exact-diagonalization and split-step cross-checks}
 }
 
+```
 
 <p align="center"><em>Built with JAX, Flax and Optax. Reference solvers in pure
 NumPy/SciPy. Every number in this repository is reproducible from the shipped

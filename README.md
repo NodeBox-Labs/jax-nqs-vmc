@@ -876,7 +876,7 @@ if not already present).
 If you use this code in academic work, please cite it as:
 
 ```bibtex
-@software{nqsvmc2024,
+@software{nqsvmc2026,
   title     = {{nqs-vmc}: Neural Quantum States with Variational Monte Carlo in {JAX}},
   author    = {Nidhal Zitouni and al},
   year      = {2026},

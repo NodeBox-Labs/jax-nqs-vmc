@@ -872,24 +872,6 @@ if not already present).
 ---
 
 
-## Contributing
-
-Contributions are welcome — whether they are bug fixes, new solver references, extended ansätze, or improved documentation. This project is designed as a **reference implementation**, so we prioritize **clarity, correctness, and reproducibility** over raw performance.
-
-### Quick start for developers
-
-```bash
-# 1. Fork and clone
-git clone https://github.com/<your-user>/jax-nqs-vmc.git
-cd jax-nqs-vmc
-
-# 2. Set up the environment
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-
-# 3. Verify everything works before you start
-pytest -q -m "not slow"
-
 ## Citation
 
 If you use this code in academic work, please cite it as:
@@ -904,8 +886,6 @@ If you use this code in academic work, please cite it as:
   note      = {Reference implementation with exact-diagonalization and split-step cross-checks}
 }
 
-
----
 
 <p align="center"><em>Built with JAX, Flax and Optax. Reference solvers in pure
 NumPy/SciPy. Every number in this repository is reproducible from the shipped

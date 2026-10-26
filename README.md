@@ -53,7 +53,6 @@ interacting quantum systems, validated against exact and mean-field solvers._
 - [Reproducing every figure](#reproducing-every-figure)
 - [Extending the code](#extending-the-code)
 - [Development](#development)
-- [License](#license)
 - [Citation](#citation)
 
 ---

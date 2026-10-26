@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nqs-vmc"
+version = "0.2.0"
+description = "Neural quantum states + variational Monte Carlo in JAX"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+dependencies = [
+    "jax>=0.4.26",
+    "jaxlib>=0.4.26",
+    "flax>=0.8.4",
+    "optax>=0.1.9",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pyyaml>=6.0",
+    "tqdm>=4.66",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-xdist>=3.5"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra -q"
+markers = ["slow: slow tests (deselect with -m 'not slow')"]
+
+[tool.ruff]
+line-length = 100

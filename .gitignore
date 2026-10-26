@@ -1,0 +1,19 @@
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# jax caches
+.jax_cache/
+
+# results (keep the placeholder, ignore the artifacts)
+results/*
+!results/.gitkeep
+
+# editors
+.vscode/
+.idea/
+.DS_Store

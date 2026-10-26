@@ -550,12 +550,12 @@ if not already present).
 
 If you use this code in academic work, please cite it as:
 
-    @software{nqsvmc2024,
+    @software{nqsvmc2026,
       title     = {{nqs-vmc}: Neural Quantum States with Variational Monte Carlo in {JAX}},
-      author    = {Your Name and contributors},
-      year      = {2024},
-      version   = {0.1.0},
-      url       = {https://github.com/<your-user>/jax-nqs-vmc},
+      author    = {Nidhal Zitouni and al.},
+      year      = {2026},
+      version   = {0.2.0},
+      url       = {https://github.com/NodeBox-Labs/jax-nqs-vmc},
       note      = {Reference implementation with exact-diagonalization and split-step cross-checks}
     }
 

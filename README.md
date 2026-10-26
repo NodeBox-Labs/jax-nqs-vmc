@@ -863,13 +863,6 @@ regress the exact-spectrum test in `tests/test_harmonic_exact.py`.
 
 ---
 
-## License
-
-MIT. See [`LICENSE`](LICENSE) (add a copy from
-[choosealicense.com/licenses/mit](https://choosealicense.com/licenses/mit/)
-if not already present).
-
----
 
 
 ## Citation

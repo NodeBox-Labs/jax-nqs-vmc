@@ -1,0 +1,33 @@
+system: two_bosons
+omega: 1.0
+g: 1.0
+N: 2
+dim: 1
+
+ansatz:
+  type: deepsets
+  hidden: [64, 64]
+  pair_hidden: [32, 32]
+  activation: tanh
+  cusp: 1.0   # matches g
+
+sampler:
+  n_chains: 128
+  n_samples: 8192
+  step_size_init: 0.3
+  target_accept: 0.55
+  burn_in: 300
+
+optimizer:
+  name: adam
+  lr: 0.003
+  n_iter: 800
+  diag_shift: 1.0e-3
+  use_diag: false
+
+excited:
+  use_ortho: false
+  level: 0
+  penalty: 0.0
+
+seeds: [0, 1]

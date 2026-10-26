@@ -1,0 +1,33 @@
+system: harmonic
+omega: 1.0
+dim: 1
+
+ansatz:
+  type: odd
+  hidden: [64, 64]
+  activation: tanh
+
+sampler:
+  n_chains: 128
+  n_samples: 8192
+  step_size_init: 0.4
+  target_accept: 0.55
+  burn_in: 200
+
+optimizer:
+  name: adam
+  lr: 0.005
+  n_iter: 500
+  diag_shift: 1.0e-3
+  use_diag: false
+
+reference:
+  L: 10.0
+  n_grid: 2048
+
+excited:
+  use_ortho: true
+  level: 1
+  penalty: 5.0
+
+seeds: [0, 1, 2, 3, 4]

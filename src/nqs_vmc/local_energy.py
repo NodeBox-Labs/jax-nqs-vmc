@@ -1,89 +1,90 @@
-"""Local energy Hψ/ψ computed via autograd.
-
-We differentiate ``log ψ`` (not ψ directly) to control dynamic range and reuse
-log-amplitude conventions. The kinetic term in 1D is
-
-    −½ ψ''/ψ = −½ [ (log ψ)'' + ((log ψ)')² ]
-
-which we implement with ``jax.hessian`` and ``jax.grad``. In d>1 the sum over
-coordinates is handled via the trace of the Hessian.
-"""
+"""Autograd local energy, correlation-aware statistics, and the orthogonality
+penalty. All numerical guards from Phase 1 live here."""
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
 
+from . import jax_config  # noqa: F401 — enables x64
 
-PotentialFn = Callable[[jnp.ndarray], jnp.ndarray]  # (N, dim) -> (N,)
+#: exp(2·logψ) is clamped to exp(60) ≈ 1e26 to stay well inside float64.
+_LOG_SQ_CLAMP: float = 60.0
 
 
 def make_local_energy(
     logpsi_fn: Callable[[dict, jnp.ndarray], jnp.ndarray],
-    potential_fn: PotentialFn,
+    potential_fn: Callable[[jnp.ndarray], jnp.ndarray],
     g: float = 0.0,
-    vmap: bool = True,
-):
-    """Return ``local_energy(params, x)`` with shape ``(N,)``.
+) -> Callable[[dict, jnp.ndarray], jnp.ndarray]:
+    """Return ``local_energy(params, x)`` of shape ``(N,)``:
 
-    The nonlinear GPE term ``g |ψ|²`` is included when ``g > 0``.
+        H ψ / ψ = -½ tr(Hess log ψ) - ½ |∇ log ψ|² + V(x) + g |ψ|²
+
+    The ``g |ψ|²`` term is included only when ``g != 0``. Its argument is
+    clamped in the log domain to prevent overflow from early-training blowups.
     """
 
     def _single(params, xi):
-        # xi shape (dim,)
         def logpsi_scalar(flat):
-            x = flat.reshape(1, -1)
-            return logpsi_fn(params, x)[0]
+            return logpsi_fn(params, flat.reshape(1, -1))[0]
 
         grad = jax.grad(logpsi_scalar)(xi)
         hess = jax.hessian(logpsi_scalar)(xi)
-        lap = jnp.trace(hess)
-        kinetic = -0.5 * (lap + jnp.sum(grad * grad))
-        pot = potential_fn(xi.reshape(1, -1))[0]
-        e = kinetic + pot
+        kinetic = -0.5 * (jnp.trace(hess) + jnp.sum(grad * grad))
+        e = kinetic + potential_fn(xi.reshape(1, -1))[0]
         if g != 0.0:
-            psi2 = jnp.exp(2.0 * logpsi_scalar(xi))
-            e = e + g * psi2
+            log_psi2 = 2.0 * logpsi_scalar(xi)
+            log_psi2 = jnp.clip(log_psi2, max=_LOG_SQ_CLAMP)
+            e = e + g * jnp.exp(log_psi2)
         return e
 
-    if vmap:
-        return jax.vmap(lambda p, xb: jax.vmap(lambda xi: _single(p, xi))(xb),
-                        in_axes=(None, 0))
-    return _single
+    return jax.vmap(lambda p, xb: jax.vmap(lambda xi: _single(p, xi))(xb),
+                    in_axes=(None, 0))
 
 
-def energy_and_variance(local_energies: jnp.ndarray):
-    """Return (E, Var, error_of_mean) with statistically correct error bars."""
-    e = local_energies
-    n = e.shape[0]
-    mean = jnp.mean(e)
-    var = jnp.var(e)
-    # error of the mean; callers can multiply by sqrt(2τ) for correlated samples
+def energy_and_variance(
+    e_loc: jnp.ndarray,
+    tau_int: jnp.ndarray | None = None,
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Return ``(E, Var, stderr)``.
+
+    When ``tau_int`` is provided, the standard error is multiplied by
+    ``sqrt(2 * tau_int)`` — the standard correction for a correlated chain
+    with estimator ``Var / n``. Without it, the returned ``stderr`` is the
+    uncorrelated estimate and *understates* the true error by a factor of
+    roughly ``sqrt(2 tau_int)``.
+    """
+    n = e_loc.shape[0]
+    mean = jnp.mean(e_loc)
+    var = jnp.var(e_loc)
     stderr = jnp.sqrt(var / n)
+    if tau_int is not None:
+        stderr = stderr * jnp.sqrt(2.0 * tau_int)
     return mean, var, stderr
 
 
-def orthogonalization_penalty(
+def overlap_squared(
     logpsi_fn: Callable[[dict, jnp.ndarray], jnp.ndarray],
     params: dict,
     ref_logpsi: Callable[[jnp.ndarray], jnp.ndarray],
     samples: jnp.ndarray,
-    weights: Optional[jnp.ndarray] = None,
-):
-    """Estimate |<ψ_ref|ψ>|² / (‖ψ_ref‖²‖ψ‖²) on the fly.
+) -> jnp.ndarray:
+    """Self-normalized estimate of ``|<ψ_ref|ψ>|² / (‖ψ_ref‖² ‖ψ‖²)``.
 
-    We use the identity E_{x~|ψ|²}[ ψ_ref(x)/ψ(x) ] = <ψ_ref|ψ> / <ψ|ψ>,
-    which is (up to normalization) the fidelity overlap. Squared modulus gives
-    a natural penalty term. This is the loss contribution for excited-state
-    searches.
+    Uses self-normalized importance sampling:
+
+        r_i = exp(log ψ_ref(x_i) - log ψ(x_i)),  x_i ~ |ψ|²
+        F = |E[r]|² / E[r²]
+
+    This is the only estimator that is bounded in ``[0, 1]`` by construction.
+    The Phase 1 audit flagged the previous estimator ``|E[r]|²`` as biased.
     """
     log_psi = logpsi_fn(params, samples)
     log_ref = ref_logpsi(samples)
     ratio = jnp.exp(log_ref - log_psi)
-    if weights is None:
-        overlap = jnp.mean(ratio)
-    else:
-        overlap = jnp.sum(weights * ratio) / jnp.sum(weights)
-    return jnp.abs(overlap) ** 2
+    num = jnp.abs(jnp.mean(ratio)) ** 2
+    den = jnp.mean(ratio ** 2)
+    return num / jnp.where(den < 1e-30, 1e-30, den)

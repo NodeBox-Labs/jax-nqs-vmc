@@ -6,8 +6,7 @@ box edges (L large enough that the wavefunction is exponentially small).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Callable, Tuple
+from collections.abc import Callable
 
 import numpy as np
 from scipy.sparse import diags
@@ -29,7 +28,7 @@ def diagonalize(
     L: float = 10.0,
     n_grid: int = 2048,
     k: int = 6,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Return (eigenvalues ascending, grid, eigenvectors columns)."""
     x = np.linspace(-L, L, n_grid)
     H = _grid_hamiltonian_1d(V, x)

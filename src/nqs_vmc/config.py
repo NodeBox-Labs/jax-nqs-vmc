@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Tuple
 
 import yaml
 
@@ -19,7 +18,7 @@ def _require(cond: bool, msg: str) -> None:
         raise ValueError(msg)
 
 
-def _as_tuple(x, name: str) -> Tuple[int, ...]:
+def _as_tuple(x, name: str) -> tuple[int, ...]:
     if isinstance(x, int):
         x = (x,)
     _require(len(x) > 0, f"{name} must be non-empty.")
@@ -31,9 +30,9 @@ def _as_tuple(x, name: str) -> Tuple[int, ...]:
 @dataclass
 class AnsatzConfig:
     type: str = "even"
-    hidden: Tuple[int, ...] = (64, 64)
+    hidden: tuple[int, ...] = (64, 64)
     activation: str = "tanh"
-    pair_hidden: Tuple[int, ...] = (32, 32)
+    pair_hidden: tuple[int, ...] = (32, 32)
     cusp: float = 0.0
 
     def __post_init__(self) -> None:
@@ -131,7 +130,7 @@ class RunConfig:
     optimizer: OptimizerConfig = field(default_factory=OptimizerConfig)
     reference: ReferenceConfig = field(default_factory=ReferenceConfig)
     excited: ExcitedConfig = field(default_factory=ExcitedConfig)
-    seeds: Tuple[int, ...] = (0, 1, 2)
+    seeds: tuple[int, ...] = (0, 1, 2)
 
     def __post_init__(self) -> None:
         _require(self.system in ("harmonic", "double_well", "gpe", "two_bosons"),
@@ -159,7 +158,7 @@ class RunConfig:
         self.excited.__post_init__()
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "RunConfig":
+    def from_yaml(cls, path: Path) -> RunConfig:
         with open(path) as f:
             raw = yaml.safe_load(f) or {}
         raw["ansatz"] = AnsatzConfig(**_norm(raw.get("ansatz", {})))

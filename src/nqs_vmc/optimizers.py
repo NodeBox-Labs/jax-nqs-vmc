@@ -3,7 +3,7 @@ and learning-rate schedules."""
 
 from __future__ import annotations
 
-from typing import Callable, Protocol, Tuple
+from typing import Protocol
 
 import jax
 import jax.numpy as jnp
@@ -14,7 +14,7 @@ from . import jax_config  # noqa: F401
 
 class Optimizer(Protocol):
     def init(self, params: dict) -> object: ...
-    def update(self, params: dict, state: object, payload: object) -> Tuple[dict, object]: ...
+    def update(self, params: dict, state: object, payload: object) -> tuple[dict, object]: ...
 
 
 def _make_schedule(base_lr: float, warmup_steps: int, schedule: str, n_iter: int):
@@ -133,7 +133,6 @@ def quantum_geometric_tensor(logpsi_fn, params, samples, e_loc):
 
 
 def build_optimizer(cfg) -> Optimizer:
-    from .config import OptimizerConfig
 
     if cfg.name == "adam":
         return AdamOpt(

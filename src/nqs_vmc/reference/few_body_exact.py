@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import numpy as np
-from scipy.sparse import csr_matrix, kron, identity, diags
+from scipy.sparse import diags, identity, kron
 from scipy.sparse.linalg import eigsh
 
 

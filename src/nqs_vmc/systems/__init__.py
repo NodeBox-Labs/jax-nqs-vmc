@@ -1,4 +1,4 @@
-from . import harmonic, anharmonic, gross_pitaevskii, few_bosons
+from . import anharmonic, few_bosons, gross_pitaevskii, harmonic
 
 SYSTEM_REGISTRY = {
     "harmonic": harmonic.HarmonicOscillator,

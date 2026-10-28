@@ -7,10 +7,9 @@ explicit symmetry factors.
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import flax.linen as nn
-import jax
 import jax.numpy as jnp
 
 

@@ -4,7 +4,6 @@ one file."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Tuple
 
 import orbax.checkpoint as ocp
 
@@ -15,7 +14,7 @@ def save(path: Path, params: dict, step: int) -> None:
     ckptr.save(str(path), {"params": params, "step": step}, force=True)
 
 
-def load(path: Path) -> Optional[Tuple[dict, int]]:
+def load(path: Path) -> tuple[dict, int] | None:
     if not path.exists():
         return None
     ckptr = ocp.PyTreeCheckpointer()

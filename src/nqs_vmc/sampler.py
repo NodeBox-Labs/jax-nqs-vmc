@@ -7,8 +7,8 @@ once per (logψ, params shape); shape-locked via ``donate_argnums``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -46,7 +46,7 @@ def sample(
     target_accept: float,
     burn_in: int,
     adapt_rate: float,
-) -> Tuple[jnp.ndarray, SamplerState]:
+) -> tuple[jnp.ndarray, SamplerState]:
     """Return ``(samples, final_state)``.
 
     ``samples`` has shape ``(n_sweeps * n_chains, dim)`` — one row per walker

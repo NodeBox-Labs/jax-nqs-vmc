@@ -227,4 +227,8 @@ clarification before responding.
 
 <p align="center"><em>This project is a teaching resource first and a research
 tool second. Contributions that make it clearer, more correct, or easier to
+<<<<<<< HEAD
 reproduce are always welcome.</em></p>
+=======
+reproduce are always welcome.</em></p>
+>>>>>>> 7b1653a883c6186ef45b840b77763340ff67e923

@@ -1,113 +1,152 @@
-"""Adam and Stochastic Reconfiguration (natural gradient).
-
-SR: at each step, compute
-
-    S_ij = <O_i O_j> - <O_i><O_j>,   F_i = <E_L O_i> - <E_L><O_i>,
-    δθ = -lr * (S + ε I)^{-1} F
-
-where O_i = ∂ log ψ / ∂θ_i. This is the quantum Fisher information metric
-(natural gradient / imaginary-time propagation).
-"""
+"""Adam and SR behind a common Protocol, with SR solvers, grad clipping,
+and learning-rate schedules."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Protocol, Tuple
 
 import jax
 import jax.numpy as jnp
 import optax
 
-
-def _flatten(tree):
-    leaves, treedef = jax.tree_util.tree_flatten(tree)
-    return jnp.concatenate([l.ravel() for l in leaves]), treedef
+from . import jax_config  # noqa: F401
 
 
-def _unflatten(vec, treedef):
-    shapes = [l.shape for l in jax.tree_util.tree_leaves(treedef)]
-    # rebuild
-    leaves = []
-    i = 0
-    for leaf in jax.tree_util.tree_leaves(jax.tree_util.tree_unflatten(treedef, [None])):
-        pass
-    raise NotImplementedError  # replaced below
+class Optimizer(Protocol):
+    def init(self, params: dict) -> object: ...
+    def update(self, params: dict, state: object, payload: object) -> Tuple[dict, object]: ...
 
 
-def make_adam(params, lr: float = 1e-3):
-    opt = optax.adam(lr)
-    state = opt.init(params)
-    return opt, state
+def _make_schedule(base_lr: float, warmup_steps: int, schedule: str, n_iter: int):
+    if schedule == "constant" and warmup_steps == 0:
+        return lambda step: base_lr
+    if schedule == "constant":
+        return optax.warmup_constant_schedule(
+            init_value=0.0, peak_value=base_lr, warmup_steps=warmup_steps,
+        )
+    # cosine
+    return optax.warmup_cosine_decay_schedule(
+        init_value=0.0,
+        peak_value=base_lr,
+        warmup_steps=warmup_steps,
+        decay_steps=max(n_iter, warmup_steps + 1),
+        end_value=base_lr * 1e-2,
+    )
+
+
+class AdamOpt:
+    def __init__(
+        self,
+        lr: float,
+        clip_norm: float = 0.0,
+        schedule: str = "constant",
+        warmup_steps: int = 0,
+        n_iter: int = 1,
+    ):
+        tx_chain = []
+        if clip_norm > 0.0:
+            tx_chain.append(optax.clip_by_global_norm(clip_norm))
+        sched = _make_schedule(lr, warmup_steps, schedule, n_iter)
+        tx_chain.append(optax.adam(sched))
+        self.tx = optax.chain(*tx_chain)
+
+    def init(self, params: dict) -> optax.OptState:
+        return self.tx.init(params)
+
+    def update(self, params, state, grads):
+        updates, state = self.tx.update(grads, state, params)
+        return optax.apply_updates(params, updates), state
 
 
 class SRUpdater:
-    """Stochastic Reconfiguration with diagonal-shift regularization."""
-
-    def __init__(self, lr: float = 0.05, diag_shift: float = 1e-3, use_diag: bool = False):
+    def __init__(
+        self,
+        lr: float,
+        diag_shift: float = 1e-3,
+        use_diag: bool = False,
+        solver: str = "solve",
+        clip_norm: float = 0.0,
+    ):
         self.lr = lr
         self.diag_shift = diag_shift
         self.use_diag = use_diag
+        self.solver = solver
+        self.clip_norm = clip_norm
 
-    def step(self, params, grads, S, F):
+    def init(self, params: dict) -> None:
+        return None
+
+    def _solve(self, S: jnp.ndarray, F: jnp.ndarray) -> jnp.ndarray:
         if self.use_diag:
-            F = F / (jnp.diag(S) + self.diag_shift)
-        else:
-            F = jnp.linalg.solve(
-                S + self.diag_shift * jnp.eye(S.shape[0]), F
-            )
-        delta = -self.lr * F
-        # walk the tree structure back
-        leaves, treedef = jax.tree_util.tree_flatten(params)
-        sizes = [l.size for l in leaves]
-        out, i = [], 0
-        for leaf, s in zip(leaves, sizes):
-            out.append(delta[i:i + s].reshape(leaf.shape))
-            i += s
-        new_params = jax.tree_util.tree_unflatten(treedef, out)
-        return new_params, delta
+            return F / (jnp.diag(S) + self.diag_shift)
+        A = S + self.diag_shift * jnp.eye(S.shape[0])
+        if self.solver == "solve":
+            return jnp.linalg.solve(A, F)
+        if self.solver == "lstsq":
+            x, *_ = jnp.linalg.lstsq(A, F, rcond=1e-8)
+            return x
+        # pinv — safest fallback
+        return jnp.linalg.pinv(A, rcond=1e-8) @ F
+
+    def update(self, params, state, S_F):
+        S, F = S_F
+        delta = -self.lr * self._solve(S, F)
+        if self.clip_norm > 0.0:
+            n = jnp.linalg.norm(delta)
+            delta = delta * jnp.minimum(1.0, self.clip_norm / (n + 1e-30))
+        return _apply_flat_update(params, delta), None
 
 
-def quantum_geometric_tensor(
-    logpsi_fn: Callable[[dict, jnp.ndarray], jnp.ndarray],
-    params: dict,
-    samples: jnp.ndarray,
-    local_energies: jnp.ndarray,
-):
-    """Return (S, F) as in the SR update.
-
-    Uses ``jax.jacrev`` over the flattened parameter vector for O_i.
-    """
-    def logpsi_flat(pflat, x):
-        params = jax.tree_util.tree_unflatten(treedef, _split(pflat, leaves_shapes))
-        return logpsi_fn(params, x)
-
+def _apply_flat_update(params: dict, delta: jnp.ndarray) -> dict:
     leaves, treedef = jax.tree_util.tree_flatten(params)
-    leaves_shapes = [l.shape for l in leaves]
+    out, i = [], 0
+    for leaf in leaves:
+        n = leaf.size
+        out.append(delta[i:i + n].reshape(leaf.shape))
+        i += n
+    return jax.tree_util.tree_unflatten(treedef, out)
 
-    def _split(pflat, shapes):
-        out, i = [], 0
+
+def quantum_geometric_tensor(logpsi_fn, params, samples, e_loc):
+    """Return ``(S, F)`` for the SR update. Memory: ``O(N·P)``."""
+    leaves, treedef = jax.tree_util.tree_flatten(params)
+    shapes = [l.shape for l in leaves]
+    p0 = jnp.concatenate([l.ravel() for l in leaves])
+
+    def logpsi_flat(pflat, x):
+        ps, i = [], 0
         for s in shapes:
-            n = 1
-            for d in s:
-                n *= d
-            out.append(pflat[i:i + n].reshape(s))
+            n = int(jnp.prod(jnp.asarray(s)))
+            ps.append(pflat[i:i + n].reshape(s))
             i += n
-        return out
+        return logpsi_fn(jax.tree_util.tree_unflatten(treedef, ps), x)
 
-    p0, _ = jnp.concatenate([l.ravel() for l in leaves]), treedef
-
-    # O_i(x) = ∂ log ψ / ∂θ_i, shape (N, P)
     def O_fn(pflat, x):
-        # per-sample O over params: shape (P,)
-        def f(p):
-            return logpsi_flat(p, x.reshape(1, -1))[0]
-        return jax.jacrev(f)(pflat)
+        return jax.jacrev(lambda p: logpsi_flat(p, x.reshape(1, -1))[0])(pflat)
 
-    O = jax.vmap(O_fn, in_axes=(None, 0))(p0, samples)  # (N, P)
-    O_mean = O.mean(0)
-    O_c = O - O_mean
-    E_mean = local_energies.mean()
-    EL_c = local_energies - E_mean
-
+    O = jax.vmap(O_fn, in_axes=(None, 0))(p0, samples)
+    O_c = O - O.mean(0)
+    E_c = e_loc - e_loc.mean()
     S = (O_c.T @ O_c) / samples.shape[0]
-    F = (O_c.T @ EL_c) / samples.shape[0]
+    F = (O_c.T @ E_c) / samples.shape[0]
     return S, F
+
+
+def build_optimizer(cfg) -> Optimizer:
+    from .config import OptimizerConfig
+
+    if cfg.name == "adam":
+        return AdamOpt(
+            lr=cfg.lr,
+            clip_norm=cfg.clip_norm,
+            schedule=cfg.schedule,
+            warmup_steps=cfg.warmup_steps,
+            n_iter=cfg.n_iter,
+        )
+    return SRUpdater(
+        lr=cfg.lr,
+        diag_shift=cfg.diag_shift,
+        use_diag=cfg.use_diag,
+        solver=cfg.sr_solver,
+        clip_norm=cfg.clip_norm,
+    )

@@ -8,11 +8,10 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 import yaml
 
 from nqs_vmc.ansatz import build_ansatz
-from nqs_vmc.diagnostics import fidelity_from_grid, aggregate_seeds, save_results
+from nqs_vmc.diagnostics import aggregate_seeds, fidelity_from_grid, save_results
 from nqs_vmc.reference.exact_diag import double_well_exact, harmonic_exact
 from nqs_vmc.systems import build_system
 from nqs_vmc.trainer import train

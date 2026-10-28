@@ -5,11 +5,10 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-import numpy as np
 import yaml
+from run_vmc import run_seed
 
 from nqs_vmc.diagnostics import aggregate_seeds
-from run_vmc import run_seed
 
 
 def main():

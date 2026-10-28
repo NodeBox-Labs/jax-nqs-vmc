@@ -1,71 +1,58 @@
-"""Metropolis–Hastings sampler with adaptive step size.
+"""Metropolis–Hastings with adaptive step size and Sokal autocorrelation.
 
-The sampler is a pure function: given a wavefunction, an initial state, and a
-PRNG key, it runs ``n_sweeps`` sweeps and returns the collected samples along
-with diagnostic information (acceptance rate, step size trajectory).
-
-For efficiency, all chains evolve in lockstep, and we use ``jax.lax.scan`` so
-the whole sampling loop is jitted end to end.
+The sampler is a pure function of (logψ, params, x0, key). All randomness
+comes from ``key``; there is no global RNG. The full sampling loop is jitted
+once per (logψ, params shape); shape-locked via ``donate_argnums``.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
 
-
-LogPsi = Callable[[dict, jnp.ndarray], jnp.ndarray]  # (params, x) -> log ψ (real)
+from . import jax_config  # noqa: F401 — enables x64
 
 
 @dataclass
 class SamplerState:
-    x: jnp.ndarray          # (n_chains, dim)
-    step_size: jnp.ndarray  # scalar
-    acc_rate: jnp.ndarray   # scalar (running)
+    x: jnp.ndarray
+    step_size: jnp.ndarray
+    acc_rate: jnp.ndarray
     key: jnp.ndarray
 
 
-def _metropolis_step(logpsi_fn, params, state: SamplerState, target_accept: float):
-    key, k_prop, k_acc, k_u = jax.random.split(state.key, 4)
-
-    noise = jax.random.normal(k_prop, state.x.shape)
-    proposal = state.x + state.step_size * noise
-
-    log_old = logpsi_fn(params, state.x)
-    log_new = logpsi_fn(params, proposal)
-    log_ratio = 2.0 * (log_new - log_old)  # log|ψ|^2
-
-    log_u = jnp.log(jax.random.uniform(k_u, log_ratio.shape))
-    accept = log_u < log_ratio
-
+def _mh_step(logpsi_fn, params, state: SamplerState,
+             target_accept: float, adapt_rate: float) -> SamplerState:
+    key, k_prop, k_u = jax.random.split(state.key, 3)
+    proposal = state.x + state.step_size * jax.random.normal(k_prop, state.x.shape)
+    log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, state.x))
+    accept = jnp.log(jax.random.uniform(k_u, log_ratio.shape)) < log_ratio
     x_new = jnp.where(accept[..., None], proposal, state.x)
     acc_rate = 0.99 * state.acc_rate + 0.01 * jnp.mean(accept)
-
-    # step-size adaptation (log-domain, kept small per step to avoid instability)
-    delta = 0.005 * (acc_rate - target_accept)
-    step_size = state.step_size * jnp.exp(delta)
-
-    new_state = SamplerState(
-        x=x_new, step_size=step_size, acc_rate=acc_rate, key=key
-    )
-    return new_state, accept
+    step_size = state.step_size * jnp.exp(adapt_rate * (acc_rate - target_accept))
+    return SamplerState(x_new, step_size, acc_rate, key)
 
 
 def sample(
-    logpsi_fn: LogPsi,
+    logpsi_fn: Callable,
     params: dict,
     x0: jnp.ndarray,
     key: jnp.ndarray,
     n_sweeps: int,
-    step_size: float = 0.5,
-    target_accept: float = 0.55,
-    burn_in: int = 200,
-    thin: int = 1,
-):
-    """Run Metropolis–Hastings and return samples of shape (n_samples, dim)."""
+    step_size: float,
+    target_accept: float,
+    burn_in: int,
+    adapt_rate: float,
+) -> Tuple[jnp.ndarray, SamplerState]:
+    """Return ``(samples, final_state)``.
+
+    ``samples`` has shape ``(n_sweeps * n_chains, dim)`` — one row per walker
+    per sweep, flattened. ``final_state`` carries the adapted step size and
+    running acceptance rate for the next call.
+    """
     state = SamplerState(
         x=x0,
         step_size=jnp.asarray(step_size, dtype=jnp.float64),
@@ -73,39 +60,34 @@ def sample(
         key=key,
     )
 
-    def body(carry, _):
-        return _metropolis_step(logpsi_fn, params, carry, target_accept)
+    def burn(c, _):
+        return _mh_step(logpsi_fn, params, c, target_accept, adapt_rate), None
 
-    # burn-in
-    state, _ = jax.lax.scan(body, state, None, length=burn_in)
+    def prod(c, _):
+        c = _mh_step(logpsi_fn, params, c, target_accept, adapt_rate)
+        return c, c.x
 
-    # production: store every `thin`-th configuration
-    def prod_body(carry, _):
-        carry, acc = body(carry, None)
-        return carry, carry.x
-
-    state, traj = jax.lax.scan(prod_body, state, None, length=n_sweeps)
-    samples = traj.reshape(-1, traj.shape[-1])[::thin]
-    return samples, state
+    if burn_in > 0:
+        state, _ = jax.lax.scan(burn, state, None, length=burn_in)
+    state, traj = jax.lax.scan(prod, state, None, length=n_sweeps)
+    return traj.reshape(-1, traj.shape[-1]), state
 
 
 def integrated_autocorr_time(values: jnp.ndarray, c: float = 5.0) -> jnp.ndarray:
-    """Integrated autocorrelation time via Sokal's window.
-
-    ``values`` shape (T,) — a scalar observable.
-    """
+    """Sokal's automatic-windowing estimator for the integrated autocorrelation
+    time. Returns a scalar jnp array."""
+    values = jnp.asarray(values)
     x = values - jnp.mean(values)
     var = jnp.mean(x * x)
     var = jnp.where(var < 1e-30, 1e-30, var)
     n = values.shape[0]
+    max_lag = min(n // 2, 2000)
 
     def acf(lag):
         return jnp.sum(x[: n - lag] * x[lag:]) / ((n - lag) * var)
 
-    max_lag = min(n // 2, 2000)
     acfs = jax.vmap(acf)(jnp.arange(max_lag))
-    # Sokal window: stop when M >= c * tau
     tau = 1.0 + 2.0 * jnp.cumsum(acfs)
     m = jnp.arange(max_lag) + 1
-    idx = jnp.where(m >= c * tau, size=max_lag, fill_value=max_lag).astype(jnp.int32)
-    return jnp.where(idx[0] < max_lag, tau[jnp.minimum(idx[0], max_lag - 1)], tau[-1])
+    idx = jnp.argmax(m >= c * tau)
+    return tau[idx]

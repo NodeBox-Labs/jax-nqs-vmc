@@ -1,5 +1,5 @@
 import numpy as np
-from nqs_vmc.reference.exact_diag import exact_1d, double_well_exact
+from nqs_vmc.reference.exact_diag import exact_1d
 
 
 def test_harmonic_eigenvalues():

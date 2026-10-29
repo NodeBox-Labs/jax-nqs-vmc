@@ -66,16 +66,15 @@ def sample(
         
         return x_new, new_sigma, new_acc_rate
 
-    # Run all steps
-    x_final, sigma_final, acc_final = jax.lax.fori_loop(
-        0, total_steps, step_fn, (x, sigma, acc_rate)
+    # Run burn-in to find good step size
+    x_burned, sigma_final, acc_final = jax.lax.fori_loop(
+        0, burn_in, step_fn, (x, sigma, acc_rate)
     )
     
-    # We need to record the trajectory, so we'll do a second pass to collect samples
-    # (This is slightly slower but 100% correct)
+    # Now run production and record the trajectory
     def record_step(i, carry):
-        x, sigma, acc_rate = carry
-        k = keys[i]
+        x, sigma, acc_rate, _ = carry  # unpack 4 elements
+        k = keys[burn_in + i]
         k_prop, k_acc = jax.random.split(k)
         
         noise = jax.random.normal(k_prop, x.shape, dtype=jnp.float64)
@@ -85,16 +84,17 @@ def sample(
         accept = log_u < log_ratio
         x_new = jnp.where(accept[:, None], proposal, x)
         
+        # We only record x_new, step size and acc_rate stay fixed
         return x_new, sigma, acc_rate, x_new
 
-    # Restart from x0, but re-run the same keys to get the trajectory
-    x_final2, _, _, traj = jax.lax.fori_loop(
-        0, total_steps, record_step, (x0, jnp.asarray(step_size), jnp.asarray(0.5), x0)
+    # Run production from the burned-in state
+    _, _, _, traj = jax.lax.fori_loop(
+        0, n_sweeps, record_step, (x_burned, sigma_final, acc_final, x_burned)
     )
     
-    # Extract samples after burn-in
-    samples = traj[burn_in:].reshape(-1, x0.shape[-1])
-    state = SamplerState(x=x_final, step_size=sigma_final, acc_rate=acc_final)
+    # Extract samples (traj shape is (n_sweeps, n_chains, dim))
+    samples = traj.reshape(-1, x0.shape[-1])
+    state = SamplerState(x=x_burned, step_size=sigma_final, acc_rate=acc_final)
     
     return samples, state
 

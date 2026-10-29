@@ -1,11 +1,11 @@
 """Matrix-Free Stochastic Reconfiguration (CG and MinSR)."""
 
 from __future__ import annotations
-from typing import Callable, Tuple
+
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
-import optax
 
 
 def _cg_solve(matvec: Callable, b: jnp.ndarray, x0: jnp.ndarray, tol: float = 1e-5, max_iter: int = 100) -> jnp.ndarray:

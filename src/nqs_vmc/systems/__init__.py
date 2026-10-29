@@ -1,12 +1,97 @@
-from . import anharmonic, few_bosons, gross_pitaevskii, harmonic
+"""System registry: each system owns its potential, g, and reference solver."""
 
-SYSTEM_REGISTRY = {
-    "harmonic": harmonic.HarmonicOscillator,
-    "double_well": anharmonic.DoubleWell,
-    "gpe": gross_pitaevskii.GrossPitaevskii,
-    "two_bosons": few_bosons.TwoBosons,
-}
+from __future__ import annotations
 
-def build_system(cfg: dict):
-    name = cfg["system"]
-    return SYSTEM_REGISTRY[name](**{k: v for k, v in cfg.items() if k not in {"system", "ansatz", "sampler", "optimizer", "seeds", "reference", "output"}})
+from typing import Any, Tuple
+
+import jax.numpy as jnp
+
+from ..config import ReferenceConfig, RunConfig
+
+
+class BaseSystem:
+    name: str = "base"
+    dim: int = 1
+    g: float = 0.0
+
+    def potential(self, x: jnp.ndarray) -> jnp.ndarray:
+        raise NotImplementedError
+
+    def reference(self, ref_cfg: ReferenceConfig) -> Tuple[Any, ...]:
+        raise NotImplementedError
+
+
+class Harmonic(BaseSystem):
+    name = "harmonic"
+
+    def __init__(self, omega: float = 1.0):
+        self.omega = omega
+
+    def potential(self, x: jnp.ndarray) -> jnp.ndarray:
+        return 0.5 * self.omega**2 * jnp.sum(x**2, -1)
+
+    def reference(self, ref_cfg: ReferenceConfig):
+        from ..reference.exact_diag import exact_1d
+        return exact_1d(lambda x: 0.5 * self.omega**2 * x**2,
+                        L=ref_cfg.L, n_grid=ref_cfg.n_grid)
+
+
+class DoubleWell(BaseSystem):
+    name = "double_well"
+
+    def __init__(self, a: float = -0.5, b: float = 0.25):
+        self.a, self.b = a, b
+
+    def potential(self, x: jnp.ndarray) -> jnp.ndarray:
+        r2 = jnp.sum(x**2, -1)
+        return self.a * r2 + self.b * r2**2
+
+    def reference(self, ref_cfg: ReferenceConfig):
+        from ..reference.exact_diag import exact_1d
+        return exact_1d(lambda x: self.a * x**2 + self.b * x**4,
+                        L=ref_cfg.L, n_grid=ref_cfg.n_grid)
+
+
+class GrossPitaevskii(BaseSystem):
+    name = "gpe"
+
+    def __init__(self, omega: float = 1.0, g: float = 1.0):
+        self.omega, self.g = omega, g
+
+    def potential(self, x: jnp.ndarray) -> jnp.ndarray:
+        return 0.5 * self.omega**2 * jnp.sum(x**2, -1)
+
+    def reference(self, ref_cfg: ReferenceConfig):
+        from ..reference.split_step import gpe_imaginary_time
+        import numpy as np
+        x = np.linspace(-ref_cfg.L, ref_cfg.L, ref_cfg.n_grid)
+        psi = gpe_imaginary_time(x, self.omega, self.g)
+        return psi, x
+
+
+class TwoBosons(BaseSystem):
+    name = "two_bosons"
+    dim = 1
+
+    def __init__(self, omega: float = 1.0, g: float = 1.0):
+        self.omega, self.g = omega, g
+
+    def potential(self, x: jnp.ndarray) -> jnp.ndarray:
+        return 0.5 * self.omega**2 * jnp.sum(x**2, -1)
+
+    def reference(self, ref_cfg: ReferenceConfig):
+        from ..reference.few_body import two_boson_ground_state
+        return two_boson_ground_state(self.omega, self.g,
+                                       L=ref_cfg.L, n=min(ref_cfg.n_grid, 400))
+
+
+def build_system(cfg: RunConfig) -> BaseSystem:
+    if cfg.system == "harmonic":
+        return Harmonic(cfg.omega)
+    if cfg.system == "double_well":
+        return DoubleWell(cfg.a, cfg.b)
+    if cfg.system == "gpe":
+        return GrossPitaevskii(cfg.omega, cfg.g)
+    if cfg.system == "two_bosons":
+        return TwoBosons(cfg.omega, cfg.g)
+    raise ValueError(cfg.system)

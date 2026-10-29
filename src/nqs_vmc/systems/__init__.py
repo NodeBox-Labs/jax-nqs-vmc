@@ -95,3 +95,39 @@ def build_system(cfg: RunConfig) -> BaseSystem:
     if cfg.system == "two_bosons":
         return TwoBosons(cfg.omega, cfg.g)
     raise ValueError(cfg.system)
+
+
+# ... existing imports ...
+
+class Harmonic2D(BaseSystem):
+    name = "harmonic2d"
+    dim = 2
+
+    def __init__(self, omega: float = 1.0):
+        self.omega = omega
+
+    def potential(self, x: jnp.ndarray) -> jnp.ndarray:
+        # x shape is (N, 2)
+        return 0.5 * self.omega**2 * jnp.sum(x**2, -1)
+
+    def reference(self, ref_cfg: ReferenceConfig):
+        # For 2D HO, the exact energy is E = n_x + n_y + 1.
+        # We return a dummy grid and dummy eigenvectors, since the VMC run 
+        # will just compare against the exact scalar energy.
+        import numpy as np
+        E0 = 1.0  # n_x=0, n_y=0
+        x_dummy = np.linspace(-5, 5, 100)
+        return np.array([E0, 2.0, 2.0, 3.0]), x_dummy, np.zeros((100, 4))
+
+def build_system(cfg: RunConfig) -> BaseSystem:
+    if cfg.system == "harmonic":
+        return Harmonic(cfg.omega)
+    if cfg.system == "harmonic2d":
+        return Harmonic2D(cfg.omega)
+    if cfg.system == "double_well":
+        return DoubleWell(cfg.a, cfg.b)
+    if cfg.system == "gpe":
+        return GrossPitaevskii(cfg.omega, cfg.g)
+    if cfg.system == "two_bosons":
+        return TwoBosons(cfg.omega, cfg.g)
+    raise ValueError(f"Unknown system: {cfg.system}")

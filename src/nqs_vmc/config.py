@@ -133,8 +133,8 @@ class RunConfig:
     seeds: tuple[int, ...] = (0, 1, 2)
 
     def __post_init__(self) -> None:
-        _require(self.system in ("harmonic", "double_well", "gpe", "two_bosons"),
-                 f"system must be harmonic|double_well|gpe|two_bosons; got {self.system!r}.")
+       # In RunConfig.__post_init__:
+        _require(self.system in ("harmonic", "harmonic2d", "double_well", "gpe", "two_bosons"),f"system must be harmonic|harmonic2d|double_well|gpe|two_bosons; got {self.system!r}.")
         _require(self.dim >= 1, "dim must be >= 1.")
         _require(len(self.seeds) > 0, "seeds must be non-empty.")
         for s in self.seeds:

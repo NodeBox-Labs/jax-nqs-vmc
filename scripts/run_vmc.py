@@ -103,7 +103,8 @@ def run_seed(cfg: dict, seed: int, outdir: Path):
     outdir.mkdir(parents=True, exist_ok=True)
     save_results(outdir, metrics, state.history)
     return metrics
-
+    from ..plotting import plot_convergence
+    plot_convergence(outdir / "metrics.jsonl", outdir / "convergence.png")
 
 def main():
     ap = argparse.ArgumentParser()

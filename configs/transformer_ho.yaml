@@ -1,0 +1,24 @@
+system: harmonic
+omega: 1.0
+dim: 1
+
+ansatz:
+  type: transformer
+  hidden: [64, 64]
+  activation: gelu
+
+sampler:
+  n_chains: 128
+  n_samples: 8192
+  step_size_init: 0.5
+  target_accept: 0.55
+  burn_in: 200
+  adapt_rate: 0.005
+
+optimizer:
+  name: minsr  # Try our new matrix-free optimizer!
+  lr: 0.005
+  n_iter: 400
+  diag_shift: 1.0e-3
+
+seeds: [0, 1]

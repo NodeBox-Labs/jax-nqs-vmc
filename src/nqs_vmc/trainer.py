@@ -20,7 +20,7 @@ from .local_energy import (
     make_local_energy,
     overlap_squared,
 )
-from .logging import JsonlLogger
+from .metrics import JsonlLogger
 from .optimizers import build_optimizer, quantum_geometric_tensor
 from .sampler import integrated_autocorr_time, sample
 from .systems import BaseSystem

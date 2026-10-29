@@ -31,7 +31,7 @@ def plot_convergence(history_path: Path, out_path: Path) -> None:
     color = "tab:red"
     ax1.set_xlabel("Iteration")
     ax1.set_ylabel("Energy", color=color)
-    ax1.plot(data["iteration"], data["energy"], color=color, label="Energy")
+    ax1.plot(data["iter"], data["energy"], color=color, label="Energy")
     ax1.tick_params(axis="y", labelcolor=color)
     ax1.axhline(y=data["energy"][-1], color="gray", linestyle="--", alpha=0.5)
 
@@ -39,7 +39,7 @@ def plot_convergence(history_path: Path, out_path: Path) -> None:
     ax2 = ax1.twinx()
     color = "tab:blue"
     ax2.set_ylabel("Variance", color=color)
-    ax2.plot(data["iteration"], data["variance"], color=color, label="Variance")
+    ax2.plot(data["iter"], data["variance"], color=color, label="Variance")
     ax2.tick_params(axis="y", labelcolor=color)
 
     fig.tight_layout()

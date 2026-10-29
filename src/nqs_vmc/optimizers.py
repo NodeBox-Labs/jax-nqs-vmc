@@ -38,6 +38,7 @@ def _make_schedule(base_lr: float, warmup_steps: int, schedule: str, n_iter: int
 
 
 class AdamOpt:
+
     def __init__(
         self,
         lr: float,
@@ -49,8 +50,17 @@ class AdamOpt:
         tx_chain = []
         if clip_norm > 0.0:
             tx_chain.append(optax.clip_by_global_norm(clip_norm))
-        sched = _make_schedule(lr, warmup_steps, schedule, n_iter)
-        tx_chain.append(optax.adam(sched))
+        
+        # Use a simple constant learning rate if schedule is constant
+        if schedule == "constant":
+            tx_chain.append(optax.adam(lr))
+        else:
+            sched = optax.warmup_cosine_decay_schedule(
+                init_value=0.0, peak_value=lr, warmup_steps=warmup_steps,
+                decay_steps=max(n_iter, warmup_steps + 1), end_value=lr * 1e-2
+            )
+            tx_chain.append(optax.adam(sched))
+            
         self.tx = optax.chain(*tx_chain)
 
     def init(self, params: dict) -> optax.OptState:

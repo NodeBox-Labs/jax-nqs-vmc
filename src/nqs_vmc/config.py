@@ -79,7 +79,7 @@ class SamplerConfig:
 @dataclass
 class OptimizerConfig:
     name: str = "adam"
-    lr: float = 5e-3
+    lr: float = 1e-3
     n_iter: int = 400
     diag_shift: float = 1e-3
     use_diag: bool = False

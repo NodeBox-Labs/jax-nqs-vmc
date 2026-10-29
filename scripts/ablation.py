@@ -2,7 +2,6 @@
 
 import pandas as pd
 from pathlib import Path
-import yaml
 from nqs_vmc.config import RunConfig
 from run_vmc import run_seed
 

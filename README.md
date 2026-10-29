@@ -103,38 +103,15 @@ splittings, mean-field mode collapse, and the contact-interaction cusp.
 
 **HO ground state — energy and variance vs optimizer step** (Adam, 5 seeds):
 
-```text
-E(x)          Adam                        Var(E_L)
-0.62 ┤●                                   1e-1 ┤●
-0.60 ┤ ●                                  3e-2 ┤ ●
-0.58 ┤  ●                                 1e-2 ┤  ●
-0.56 ┤   ●●                               3e-3 ┤   ●
-0.54 ┤     ●●                             1e-3 ┤    ●●
-0.52 ┤       ●●●                          3e-4 ┤      ●●●
-0.50 ┤          ●●●●●●●●●●●●●●●●●●●       1e-4 ┤         ●●●●●●●●●●●●●●●●●●●
-     └─────┬─────┬─────┬─────┬─────┬──         └─────┬─────┬─────┬─────┬─────┬──
-      0    100   200   300   400  500          0    100   200   300   400  500
-                 step                                    step
+![HO convergence](docs/figures/ho_convergence.png)
 
-Dashed target E = 0.5. Filled band = 1σ over 5 seeds.
-Variance hits the float64 noise floor (~4e-5) around step 350.
-```
+*Dashed line is the exact target `E = 0.5`. Filled band is `1σ` over 5 seeds. The variance reaches the float64 noise floor around step 350.*
 
 **Adam vs SR vs Matrix-Free SR on the HO ground state** (same ansatz, same seeds):
 
-```text
-|ΔE| (log)
-1e-1 ┤ ●  Adam                                SR converges in ~120 steps,
-3e-2 ┤  ●                                     MinSR in ~100 but at O(P) memory
-1e-2 ┤   ●●                                   instead of O(P²). Adam takes
-3e-3 ┤  SR  ●●                                ~350 steps but wins on wall-clock
-1e-3 ┤       ●●●●●●●●●●                       for networks wider than ~128.
-3e-4 ┤           Adam  ●●●●●●●●●●●●●●●
-1e-4 ┤                                  ●
-     └──┬────┬────┬────┬────┬────┬────┬──
-       0   50  100  150  200  250  300
-               step
-```
+![Optimizer comparison](docs/figures/optimizer_comparison.png)
+
+*SR converges faster per step, but costs `O(P²)` per iteration. Matrix-Free SR matches SR's convergence speed but requires only `O(NP)` memory.*
 
 **Network-width sweep** — final `|ΔE|` and `Var(E_L)` vs hidden width:
 

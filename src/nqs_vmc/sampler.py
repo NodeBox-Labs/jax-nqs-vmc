@@ -21,13 +21,27 @@ class SamplerState:
 
 
 def _mh_step(logpsi_fn, params, state: SamplerState, target_accept: float, adapt_rate: float) -> SamplerState:
-    key, k_prop, k_u = jax.random.split(state.key, 3)
-    proposal = state.x + state.step_size * jax.random.normal(k_prop, state.x.shape)
+    # Split the key into TWO independent subkeys: one for noise, one for acceptance
+    key, k_prop, k_acc, k_rand = jax.random.split(state.key, 4)
+    
+    # 1. Proposal noise
+    noise = jax.random.normal(k_prop, state.x.shape)
+    proposal = state.x + state.step_size * noise
+    
+    # 2. Log ratio
     log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, state.x))
-    accept = jnp.log(jax.random.uniform(k_u, log_ratio.shape)) < log_ratio
+    
+    # 3. Accept/Reject (use k_acc for the uniform distribution)
+    accept = jnp.log(jax.random.uniform(k_acc, log_ratio.shape)) < log_ratio
+    
     x_new = jnp.where(accept[..., None], proposal, state.x)
+    
+    # 4. Update running acceptance rate
     acc_rate = 0.99 * state.acc_rate + 0.01 * jnp.mean(accept)
+    
+    # 5. Adapt step size
     step_size = state.step_size * jnp.exp(adapt_rate * (acc_rate - target_accept))
+    
     return SamplerState(x_new, step_size, acc_rate, key)
 
 

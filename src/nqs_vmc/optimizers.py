@@ -47,7 +47,11 @@ class AdamOpt:
         warmup_steps: int = 0,
         n_iter: int = 1,
     ):
-        tx_chain = []
+        tx_chain = [
+            optax.clip_by_global_norm(1.0),  # <--- ADD THIS LINE
+            optax.adam(lr)
+        ]
+        self.tx = optax.chain(*tx_chain)
         if clip_norm > 0.0:
             tx_chain.append(optax.clip_by_global_norm(clip_norm))
         

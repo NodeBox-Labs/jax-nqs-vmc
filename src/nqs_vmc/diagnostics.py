@@ -15,8 +15,8 @@ def fidelity_from_grid(logpsi_fn, params, x_grid: jnp.ndarray, ref_psi_grid: np.
     log_psi = logpsi_fn(params, x_grid[:, None])
     psi = jnp.exp(log_psi - jnp.max(log_psi))
     psi = psi / jnp.sqrt(jnp.trapezoid(psi**2, x_grid))
-    ref = ref_psi_grid / np.sqrt(np.trapz(ref_psi_grid**2, x_grid))
-    overlap = jnp.abs(jnp.trapz(psi * ref, x_grid)) ** 2
+    ref = ref_psi_grid / np.sqrt(np.trapezoid(ref_psi_grid**2, x_grid))
+    overlap = jnp.abs(jnp.trapezoid(psi * ref, x_grid)) ** 2
     return float(overlap)
 
 

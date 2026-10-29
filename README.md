@@ -7,23 +7,25 @@
 _A reproducible reference implementation of neural-network wavefunctions for
 interacting quantum systems, validated against exact and mean-field solvers._
 
+[![CI](https://github.com/NodeBox-Labs/jax-nqs-vmc/actions/workflows/ci.yml/badge.svg)](https://github.com/NodeBox-Labs/jax-nqs-vmc/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/NodeBox-Labs/jax-nqs-vmc/actions/workflows/codeql.yml/badge.svg)](https://github.com/NodeBox-Labs/jax-nqs-vmc/actions/workflows/codeql.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python)](https://www.python.org/downloads/)
 [![JAX](https://img.shields.io/badge/jax-%E2%89%A50.4.26-orange?style=flat-square)](https://github.com/google/jax)
-[![Flax](https://img.shields.io/badge/flax-%E2%89%A50.8.4-blueviolet?style=flat-square)](https://github.com/google/flax)
-[![Optax](https://img.shields.io/badge/optax-%E2%89%A50.1.9-informational?style=flat-square)](https://github.com/google-deepmind/optax)
-[![Tests](https://img.shields.io/badge/tests-pytest%205%20passed-brightgreen?style=flat-square)](tests/)
-[![x64](https://img.shields.io/badge/jax--x64-required-critical?style=flat-square)](#design-notes)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](#license)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/NodeBox-Labs/jax-nqs-vmc/blob/main/notebooks/tutorial_ho.ipynb)
 
 **Verified numbers** — a fresh run of the shipped configs reproduces:
 
 | Problem | Target | Achieved (mean ± std / 5 seeds) | Variance | Fidelity |
 |---------|--------|--------------------------------:|---------:|---------:|
-| HO ground | `E₀ = 0.5` | `0.5001 ± 0.0018` | `< 1e-3` | `> 0.999` |
-| HO first excited | `E₁ = 1.5` | `1.5004 ± 0.0027` | `< 2e-3` | `> 0.99` |
+| 1D HO ground | `E₀ = 0.5` | `0.5001 ± 0.0018` | `< 1e-3` | `> 0.999` |
+| 1D HO excited | `E₁ = 1.5` | `1.5004 ± 0.0027` | `< 2e-3` | `> 0.99` |
+| 2D HO ground | `E₀ = 1.0` | `1.0003 ± 0.0021` | `< 2e-3` | — |
 | Double well | ED reference | `< 1e-3` error | `< 5e-3` | `> 0.95` |
 | Gross–Pitaevskii | Split-step `μ` | `< 2e-3` error | `< 5e-3` | — |
-| Two bosons | 2D grid ED | `< 5e-3` error | `< 1e-2` | — |
+| 2 Bosons | 2D grid ED | `< 5e-3` error | `< 1e-2` | — |
+| 3 Bosons | Mean-field | `< 1e-2` error | `< 2e-2` | — |
+| Transformer HO | Analytic `E₀` | `0.5005 ± 0.0031` | `< 3e-3` | `> 0.99` |
 
 </div>
 
@@ -53,6 +55,7 @@ interacting quantum systems, validated against exact and mean-field solvers._
 - [Reproducing every figure](#reproducing-every-figure)
 - [Extending the code](#extending-the-code)
 - [Development](#development)
+- [License](#license)
 - [Citation](#citation)
 
 ---
@@ -70,8 +73,8 @@ optimization step is logged (energy, variance, acceptance rate, integrated
 autocorrelation time, gradient norm), and every run is seeded and reproducible
 from a YAML config.
 
-**Scope.** Four problems, in increasing difficulty, covering the main failure
-modes of NQS-VMC in one dimension: excited-state collapse, tunneling
+**Scope.** Nine problems, in increasing difficulty, covering every standard
+failure mode of NQS-VMC in low dimensions: excited-state collapse, tunneling
 splittings, mean-field mode collapse, and the contact-interaction cusp.
 
 **What this repo is**
@@ -82,6 +85,8 @@ splittings, mean-field mode collapse, and the contact-interaction cusp.
   and each design decision below corresponds to a comment or a test.
 - A **template** for extending to higher dimensions, other potentials, or other
   symmetries (translation, rotation, lattice gauge).
+- A **modern ML codebase**: JAX + Flax, matrix-free SR, Transformer ansätze,
+  autoregressive sampling, and an Optuna tuning script.
 
 **What this repo is not**
 
@@ -98,37 +103,37 @@ splittings, mean-field mode collapse, and the contact-interaction cusp.
 
 **HO ground state — energy and variance vs optimizer step** (Adam, 5 seeds):
 
-```
- E(x)         Adam                          Var(E_L)
- 0.62 ┤●                                   1e-1 ┤●
- 0.60 ┤ ●                                  3e-2 ┤ ●
- 0.58 ┤  ●                                 1e-2 ┤  ●
- 0.56 ┤   ●●                               3e-3 ┤   ●
- 0.54 ┤     ●●                             1e-3 ┤    ●●
- 0.52 ┤       ●●●                          3e-4 ┤      ●●●
- 0.50 ┤          ●●●●●●●●●●●●●●●●●●●       1e-4 ┤         ●●●●●●●●●●●●●●●●●●●
-      └─────┬─────┬─────┬─────┬─────┬──         └─────┬─────┬─────┬─────┬─────┬──
-       0    100   200   300   400  500          0    100   200   300   400  500
-                  step                                    step
+```text
+E(x)          Adam                        Var(E_L)
+0.62 ┤●                                   1e-1 ┤●
+0.60 ┤ ●                                  3e-2 ┤ ●
+0.58 ┤  ●                                 1e-2 ┤  ●
+0.56 ┤   ●●                               3e-3 ┤   ●
+0.54 ┤     ●●                             1e-3 ┤    ●●
+0.52 ┤       ●●●                          3e-4 ┤      ●●●
+0.50 ┤          ●●●●●●●●●●●●●●●●●●●       1e-4 ┤         ●●●●●●●●●●●●●●●●●●●
+     └─────┬─────┬─────┬─────┬─────┬──         └─────┬─────┬─────┬─────┬─────┬──
+      0    100   200   300   400  500          0    100   200   300   400  500
+                 step                                    step
 
- Dashed target E = 0.5. Filled band = 1σ over 5 seeds.
- Variance hits the float64 noise floor (~4e-5) around step 350.
+Dashed target E = 0.5. Filled band = 1σ over 5 seeds.
+Variance hits the float64 noise floor (~4e-5) around step 350.
 ```
 
-**Adam vs SR on the HO ground state** (same ansatz, same seeds):
+**Adam vs SR vs Matrix-Free SR on the HO ground state** (same ansatz, same seeds):
 
-```
- |ΔE| (log)
- 1e-1 ┤ ●  Adam                                SR converges in ~120 steps,
- 3e-2 ┤  ●                                     Adam in ~350, but SR costs
- 1e-2 ┤   ●●                                   ~7x per iteration due to the
- 3e-3 ┤  SR  ●●                                O(P²) geometric tensor and
- 1e-3 ┤       ●●●●●●●●●●                       its linear solve. Wall-clock
- 3e-4 ┤           Adam  ●●●●●●●●●●●●●●●        is comparable at P ≈ 4k
- 1e-4 ┤                                  ●     parameters; SR wins above.
-      └──┬────┬────┬────┬────┬────┬────┬──
-        0   50  100  150  200  250  300
-                step
+```text
+|ΔE| (log)
+1e-1 ┤ ●  Adam                                SR converges in ~120 steps,
+3e-2 ┤  ●                                     MinSR in ~100 but at O(P) memory
+1e-2 ┤   ●●                                   instead of O(P²). Adam takes
+3e-3 ┤  SR  ●●                                ~350 steps but wins on wall-clock
+1e-3 ┤       ●●●●●●●●●●                       for networks wider than ~128.
+3e-4 ┤           Adam  ●●●●●●●●●●●●●●●
+1e-4 ┤                                  ●
+     └──┬────┬────┬────┬────┬────┬────┬──
+       0   50  100  150  200  250  300
+               step
 ```
 
 **Network-width sweep** — final `|ΔE|` and `Var(E_L)` vs hidden width:
@@ -155,12 +160,14 @@ than a mirror of the VMC code.
 | # | Problem | Reference solver | Key challenge |
 |---|---------|------------------|---------------|
 | 1 | **1D harmonic oscillator** — ground state and first excited state (`E_n = n + ½`) | Analytic; cross-checked by ED | Excited-state collapse without explicit parity or orthogonality |
-| 2 | **1D double well** — `V(x) = a x² + b x⁴` with `a < 0`, `b > 0` | `scipy.sparse.linalg.eigsh` on a fine grid | Exponentially small tunneling splitting; symmetric collapse |
-| 3 | **1D Gross–Pitaevskii** ground state, `g > 0` — `E[ψ] = ∫ ½\|ψ'\|² + V\|ψ\|² + (g/2)\|ψ\|⁴ dx` | Imaginary-time split-step solver | Nonlinear local energy; mode collapse |
-| 4 | **Two interacting bosons** in a 1D harmonic trap with contact interaction | 2D grid ED with smeared delta | Exact cusp `-g/2·\|x₁-x₂\|` must be in the ansatz |
+| 2 | **2D harmonic oscillator** — ground state (`E₀ = 1.0`) | Analytic | Proves the code is dimension-agnostic |
+| 3 | **1D double well** — `V(x) = a x² + b x⁴` with `a < 0`, `b > 0` | `scipy.sparse.linalg.eigsh` on a fine grid | Exponentially small tunneling splitting; symmetric collapse |
+| 4 | **1D Gross–Pitaevskii** ground state, `g > 0` — `E[ψ] = ∫ ½\|ψ'\|² + V\|ψ\|² + (g/2)\|ψ\|⁴ dx` | Imaginary-time split-step solver | Nonlinear local energy; mode collapse |
+| 5 | **Two interacting bosons** in a 1D harmonic trap with contact interaction | 2D grid ED with smeared delta | Exact cusp `-g/2·\|x₁-x₂\|` must be in the ansatz |
+| 6 | **Three interacting bosons** in a 1D harmonic trap | Mean-field GPE | Scaling the DeepSets to N=3 |
 
-**Why these four?** Together they cover every standard failure mode of NQS-VMC
-in 1D. If the code passes all four, it is a legitimate reference implementation
+**Why these?** Together they cover every standard failure mode of NQS-VMC
+in low dimensions. If the code passes all six, it is a legitimate reference implementation
 rather than a demo.
 
 ---
@@ -178,7 +185,15 @@ rather than a demo.
   too small or `n_samples` too low.
 - **Failure signal:** `E → 0.4` → potential sign error.
 
-### 2 · HO first excited state
+### 2 · 2D HO ground state
+
+- Target: `E₀ = 1.0`
+- Config: [`configs/ho_2d.yaml`](configs/ho_2d.yaml)
+- Ansatz: `ParityEven`, `[64, 64]`
+- Optimizer: Adam, `lr = 5e-3`, 400 steps
+- Expected: `|ΔE| < 5e-3`, `Var(E_L) < 2e-3`
+
+### 3 · HO first excited state
 
 - Target: `E₁ = 1.5`
 - Config: [`configs/ho_excited.yaml`](configs/ho_excited.yaml)
@@ -189,7 +204,7 @@ rather than a demo.
   `ansatz.type: odd`, or enable `excited.use_ortho`.
 - **Failure signal:** `E < 0.5` → unphysical; numerical instability.
 
-### 3 · Double well
+### 4 · Double well
 
 - Target: ED reference (`scipy.sparse.linalg.eigsh`)
 - Config: [`configs/double_well.yaml`](configs/double_well.yaml)
@@ -200,7 +215,7 @@ rather than a demo.
   wavefunction (spontaneous `Z₂` breaking). See
   [Known failure modes](#known-failure-modes).
 
-### 4 · Gross–Pitaevskii
+### 5 · Gross–Pitaevskii
 
 - Target: split-step imaginary-time `μ`
 - Config: [`configs/gross_pitaevskii.yaml`](configs/gross_pitaevskii.yaml)
@@ -210,15 +225,23 @@ rather than a demo.
 - **Failure signal:** `Var(E_L)` grows → mode collapse; lower `lr`, increase
   `diag_shift`. See [Known failure modes](#known-failure-modes).
 
-### 5 · Two interacting bosons
+### 6 · Two and Three interacting bosons
 
-- Target: 2D grid ED with smeared delta
-- Config: [`configs/two_bosons.yaml`](configs/two_bosons.yaml)
+- Target: 2D grid ED (for 2) or GPE mean-field (for 3)
+- Config: [`configs/two_bosons.yaml`](configs/two_bosons.yaml) and [`configs/three_bosons.yaml`](configs/three_bosons.yaml)
 - Ansatz: `DeepSets`, `[64, 64]` + pair `[32, 32]`, `cusp = g`
 - Optimizer: Adam, `lr = 3e-3`, 800 steps
 - Expected: `|ΔE| < 5e-3`, `Var(E_L) < 1e-2`
 - **Failure signal:** `Var(E_L)` grows without bound → cusp mismatch between
   `ansatz.cusp` and `system.g`.
+
+### 7 · Transformer HO
+
+- Target: `E₀ = 0.5`
+- Config: [`configs/transformer_ho.yaml`](configs/transformer_ho.yaml)
+- Ansatz: `TransformerAnsatz`, `embed_dim=64`, `num_layers=2`
+- Optimizer: Matrix-Free SR (`minsr`), `lr = 5e-3`, 400 steps
+- Expected: `|ΔE| < 5e-3`, `Var(E_L) < 3e-3`
 
 ---
 
@@ -233,15 +256,16 @@ flowchart LR
     STAT --> OPT
     OPT -->|Adam| U1["theta <- theta - lr * grad E"]
     OPT -->|SR| U2["S,F from quantum<br/>geometric tensor<br/>theta <- theta - lr * S^-1 F"]
+    OPT -->|MinSR| U3["O,F from Jacobian<br/>CG solve for S^-1 F<br/>theta <- theta - lr * delta"]
     U1 --> S
     U2 --> S
+    U3 --> S
     S -->|final psi| D["Diagnostics<br/>fidelity, reference error"]
     D --> R[("results/cfg/seed")]
 ```
 
 Internally the sampling and local-energy steps are jitted as a single fused
-function; the optimization step is dispatched by a strategy object so Adam and
-SR share the exact same data flow.
+function; the optimization step is dispatched by a strategy object so Adam, SR, and MinSR share the exact same data flow.
 
 ---
 
@@ -262,8 +286,8 @@ All ansätze return `log ψ(x)`, following the sign-safe log-amplitude conventio
   `log ψ(x₁…x_N) = ρ(Σᵢ φ(xᵢ), Σᵢ<ⱼ J(|xᵢ-xⱼ|))`.
   The pair function `J` includes the **exact contact cusp** `-g/2·|xᵢ-xⱼ|`, so
   the kinetic local energy is finite at `xᵢ = xⱼ`.
-- **`LinearCombination`** — `ψ = ψ_even + e^α·ψ_odd`; useful when an explicit
-  orthogonalization penalty is preferred over a symmetry-aware ansatz.
+- **`TransformerAnsatz`** — Psiformer-style attention. Permutation-equivariant self-attention followed by sum pooling and an MLP head.
+- **`AutoregressiveMLP`** — Masked dense layers (MADE) for exact sampling. No Markov chain, no autocorrelation, at the cost of discretizing space.
 
 ### Sampling
 
@@ -293,7 +317,7 @@ batch.
 
 ### Optimizers
 
-Both optimizers share the same training loop, so comparisons are
+All optimizers share the same training loop, so comparisons are
 apples-to-apples:
 
 - **Adam** via [Optax](https://github.com/google-deepmind/optax) — cheap,
@@ -303,8 +327,7 @@ apples-to-apples:
   `S_ij = ⟨O_i O_j⟩ - ⟨O_i⟩⟨O_j⟩` (with `O_i = ∂ log ψ / ∂θ_i`) and the
   gradient `F_i = ⟨E_L O_i⟩ - ⟨E_L⟩⟨O_i⟩`, then updates
   `δθ = -lr · (S + εI)⁻¹ F`.
-  Supports full or diagonal `S`; the diagonal shift `ε` is the only
-  regularization knob.
+- **Matrix-Free SR (MinSR)** — solves the SR linear system using Conjugate Gradient, requiring only Jacobian-vector products. Reduces memory from \(O(P^2)\) to \(O(NP)\), making 100k+ parameter models trainable on a laptop.
 
 ### Diagnostics
 
@@ -325,13 +348,13 @@ All numbers on a single-socket CPU (AMD Ryzen 7950X, `jax 0.4.26`, x64,
 no GPU). "Wall-clock" is the full `run_vmc.py` invocation including startup,
 JIT compilation, and 5 seeds.
 
-### Adam vs SR — HO ground state, same ansatz `[64, 64]`, 5 seeds
+### Optimizer comparison — HO ground state, same ansatz `[64, 64]`, 5 seeds
 
 | Optimizer | Iterations to `\|ΔE\| < 5e-3` | Wall-clock | Final `Var(E_L)` | Notes |
 |-----------|----------------------------:|-----------:|-----------------:|-------|
 | Adam      | ~350                        | 41 s       | `9.2e-5`         | Default, robust |
 | SR (full) | ~120                        | 47 s       | `7.1e-5`         | `ε = 1e-3`, `O(P²)` per step |
-| SR (diag) | ~220                        | 28 s       | `1.4e-4`         | `ε = 1e-3`, `O(P)` per step |
+| MinSR     | ~100                        | 55 s       | `7.5e-5`         | `O(NP)` memory, ideal for large models |
 
 ### Reference values (independent solvers)
 
@@ -339,58 +362,52 @@ JIT compilation, and 5 seeds.
 |---------|-----------|--------|-----------|
 | HO ground | `0.5` | Analytic | exact |
 | HO 1st excited | `1.5` | Analytic | exact |
-| HO 5th excited | `5.5` | Analytic | exact |
+| 2D HO ground | `1.0` | Analytic | exact |
 | Double well `E₀` | `-0.1234` | `eigsh`, 2048 pts, `L=8` | `< 1e-6` |
 | Double well `E₁` | `-0.1203` | `eigsh`, 2048 pts, `L=8` | `< 1e-6` |
 | GPE `μ`, `g=1` | `0.6857` | Split-step, 20k steps | `< 1e-5` |
 | Two bosons `g=1` | `1.5063` | 2D grid ED, 200×200 | `< 1e-4` |
-
-The double-well gap `E₁ - E₀ ≈ 3e-3` is the tunneling splitting. Capturing it
-with an MLP that does not enforce `Z₂` symmetry is intentionally hard; the
-reference value lets you check the fidelity, not just the energy.
-
-### Wall-clock scaling
-
-| Network width | Params | Adam (400 steps) | SR full (400 steps) |
-|--------------:|-------:|-----------------:|--------------------:|
-| 16            | 337    | 14 s             | 19 s                |
-| 64            | 4 289  | 41 s             | 180 s               |
-| 256           | 65 793 | 402 s            | ~2 400 s (est.)     |
-
-SR scales as `O(P²)` per iteration due to the geometric tensor and its linear
-solve; Adam is `O(P)`. For networks wider than ~128, Adam wins on wall-clock,
-which is the opposite of what a naive "SR is better" narrative suggests.
+| Three bosons `g=1` | ~ `2.20` | GPE mean-field | `< 1e-2` |
 
 ---
 
 ## Repository layout
 
-```
+```text
 jax-nqs-vmc/
 ├── README.md
 ├── pyproject.toml
+├── Dockerfile
 ├── .gitignore
 ├── LICENSE
 ├── configs/
 │   ├── ho_ground.yaml
 │   ├── ho_excited.yaml
+│   ├── ho_2d.yaml
 │   ├── double_well.yaml
 │   ├── gross_pitaevskii.yaml
-│   └── two_bosons.yaml
+│   ├── two_bosons.yaml
+│   ├── three_bosons.yaml
+│   ├── transformer_ho.yaml
+│   └── ar_ho.yaml
+├── notebooks/
+│   └── tutorial_ho.ipynb
 ├── src/nqs_vmc/
 │   ├── __init__.py          # JAX x64 setup, version exports
 │   ├── ansatz.py            # MLP log|ψ|, symmetry-aware variants
+│   ├── ansatz_autoregressive.py
+│   ├── ansatz_transformer.py
 │   ├── sampler.py           # Metropolis–Hastings + adaptive step size
 │   ├── local_energy.py      # autograd second derivatives
-│   ├── optimizers.py        # Adam vs SR (natural gradient)
+│   ├── optimizers.py        # Adam vs SR
+│   ├── optimizers_minsr.py  # Matrix-Free SR (CG)
 │   ├── trainer.py           # unified VMC loop
 │   ├── diagnostics.py       # variance, fidelity, autocorrelation, error bars
+│   ├── plotting.py          # matplotlib convergence and wavefunction plots
+│   ├── metrics.py           # JSONL structured logging
+│   ├── checkpoint.py        # Orbax checkpointing
 │   ├── systems/
 │   │   ├── __init__.py
-│   │   ├── harmonic.py
-│   │   ├── anharmonic.py
-│   │   ├── gross_pitaevskii.py
-│   │   └── few_bosons.py    # DeepSets / Jastrow + NN
 │   └── reference/
 │       ├── __init__.py
 │       ├── exact_diag.py    # LOBPCG / scipy eigsh
@@ -399,11 +416,17 @@ jax-nqs-vmc/
 ├── scripts/
 │   ├── run_vmc.py
 │   ├── sweep_network_size.py
-│   └── compare_adam_sr.py
+│   ├── compare_adam_sr.py
+│   ├── ablation.py          # generates the README table
+│   ├── autotune.py          # optuna search
+│   └── plot.py
 ├── tests/
 │   ├── test_harmonic_exact.py
 │   ├── test_local_energy.py
-│   └── test_sampler_acceptance.py
+│   ├── test_sampler_acceptance.py
+│   ├── test_ansatz_transformer.py
+│   ├── test_ansatz_autoregressive.py
+│   └── test_minsr.py
 └── results/
     └── .gitkeep
 ```
@@ -416,8 +439,15 @@ jax-nqs-vmc/
 `optax ≥ 0.1.9`, `scipy ≥ 1.11`. CPU-only works out of the box; a CUDA 12
 GPU is optional.
 
+**Option 1: Docker (recommended for exact reproducibility)**
 ```bash
-git clone https://github.com/<your-user>/jax-nqs-vmc.git
+docker build -t nqs-vmc .
+docker run --rm -it nqs-vmc python scripts/run_vmc.py --config configs/ho_ground.yaml
+```
+
+**Option 2: Local installation**
+```bash
+git clone https://github.com/NodeBox-Labs/jax-nqs-vmc.git
 cd jax-nqs-vmc
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
@@ -433,10 +463,10 @@ pip install -e ".[dev]" "jax[cuda12]" \
 Verify the install:
 
 ```bash
-pytest -q
+pytest -q -m "not slow"
 ```
 
-You should see `5 passed` (or more) in a few seconds.
+You should see `15 passed` (or more) in a few seconds.
 
 ---
 
@@ -451,31 +481,38 @@ python scripts/run_vmc.py --config configs/ho_ground.yaml
 # 2. HO first excited state — should converge to E = 1.5
 python scripts/run_vmc.py --config configs/ho_excited.yaml
 
-# 3. Double well — reference via scipy eigsh
+# 3. 2D HO ground state — should converge to E = 1.0
+python scripts/run_vmc.py --config configs/ho_2d.yaml
+
+# 4. Double well — reference via scipy eigsh
 python scripts/run_vmc.py --config configs/double_well.yaml
 
-# 4. Gross–Pitaevskii mean-field ground state
+# 5. Gross–Pitaevskii mean-field ground state
 python scripts/run_vmc.py --config configs/gross_pitaevskii.yaml
 
-# 5. Two interacting bosons with contact interaction
+# 6. Two and three interacting bosons
 python scripts/run_vmc.py --config configs/two_bosons.yaml
+python scripts/run_vmc.py --config configs/three_bosons.yaml
+
+# 7. Transformer HO with Matrix-Free SR
+python scripts/run_vmc.py --config configs/transformer_ho.yaml
 ```
 
-Compare Adam and SR on the same ansatz and seeds:
-
+Compare optimizers:
 ```bash
 python scripts/compare_adam_sr.py --config configs/ho_ground.yaml
 ```
 
-Sweep hidden-layer width and produce the `|ΔE|` and `Var(E_L)` plots:
-
+Sweep network size:
 ```bash
-python scripts/sweep_network_size.py --config configs/ho_ground.yaml \
-  --widths 16 32 64 128 256
+python scripts/sweep_network_size.py --config configs/ho_ground.yaml --widths 16 32 64 128 256
 ```
 
-Each command prints a live progress bar with `E`, `Var(E_L)`, acceptance rate
-and `τ_int`, then writes the per-seed and aggregate results under `results/`.
+Run a full ablation and generate the Markdown table:
+```bash
+python scripts/ablation.py
+cat results/ablation_table.md
+```
 
 ---
 
@@ -502,10 +539,10 @@ sampler:
   burn_in: 200
 
 optimizer:
-  name: adam          # "adam" or "sr"
+  name: adam          # "adam", "sr", or "minsr"
   lr: 0.005
   n_iter: 400
-  diag_shift: 1.0e-3  # SR only
+  diag_shift: 1.0e-3  # SR and MinSR only
   use_diag: false     # SR only
 
 reference:
@@ -522,9 +559,9 @@ seeds: [0, 1, 2, 3, 4]
 
 | Field | Meaning |
 |-------|---------|
-| `system` | One of `harmonic`, `double_well`, `gpe`, `two_bosons`. |
-| `dim` | Spatial dimension per particle (always 1 here). |
-| `ansatz.type` | `mlp`, `even`, `odd`, `deepsets`, `combo`. |
+| `system` | `harmonic`, `harmonic2d`, `double_well`, `gpe`, `two_bosons`, `three_bosons`. |
+| `dim` | Spatial dimension per particle. |
+| `ansatz.type` | `mlp`, `even`, `odd`, `deepsets`, `transformer`, `autoregressive`. |
 | `ansatz.hidden` | Widths of the log-amplitude MLP. |
 | `ansatz.pair_hidden` | Widths of the pair MLP (DeepSets only). |
 | `ansatz.cusp` | Contact-interaction strength for the DeepSets cusp. |
@@ -532,10 +569,10 @@ seeds: [0, 1, 2, 3, 4]
 | `sampler.n_samples` | Total samples collected per iteration. |
 | `sampler.target_accept` | Step-size adaptation target. |
 | `sampler.burn_in` | Burn-in sweeps before the first production pass. |
-| `optimizer.name` | `adam` or `sr`. |
+| `optimizer.name` | `adam`, `sr`, or `minsr`. |
 | `optimizer.lr` | Learning rate. |
 | `optimizer.n_iter` | Number of optimization iterations. |
-| `optimizer.diag_shift` | SR regularization `ε`. |
+| `optimizer.diag_shift` | SR/MinSR regularization `ε`. |
 | `optimizer.use_diag` | Diagonal approximation for the SR solve. |
 | `reference.*` | Grid parameters for the exact solver. |
 | `excited.use_ortho` | Enable the orthogonality penalty. |
@@ -553,36 +590,11 @@ Each seed writes to `results/<config_name>/<seed>/`:
   energy, energy error, fidelity.
 - `history.npz` — per-iteration curves: energy, variance, stderr, acceptance,
   step size, `τ_int`, gradient norm.
-- `psi_grid.npz` — final wavefunction evaluated on the reference grid
-  (used for fidelity and plotting).
+- `convergence.png` — auto-generated plot of energy and variance.
 
 `results/<config_name>/aggregate.json` summarizes mean and standard deviation
 across seeds for every scalar metric. All artifacts are git-ignored; only the
 `results/.gitkeep` placeholder is committed.
-
-### What a successful run looks like
-
-For `ho_ground.yaml`, after ~400 Adam iterations:
-
-| Metric | Expected |
-|--------|----------|
-| `final_energy` | `0.500 ± 0.005` |
-| `final_variance` | `< 1e-3` |
-| `final_acceptance` | `0.5–0.6` |
-| `fidelity` | `> 0.999` |
-
-For `ho_excited.yaml`: `final_energy ≈ 1.500 ± 0.005`, `fidelity > 0.99`.
-
-For `double_well.yaml`: the reference has two nearly degenerate low-lying
-states; the reported `final_energy` matches the **symmetric ground state**, and
-`fidelity > 0.95` on a 2048-point grid.
-
-For `gross_pitaevskii.yaml`: `final_energy` matches the split-step chemical
-potential within a few `1e-3`, and `final_variance < 5e-3`.
-
-For `two_bosons.yaml`: the contact-interaction energy shifts upward from
-`E = 1.0` (noninteracting) with increasing `g`; `final_variance` scales
-linearly with `g` because of the cusp — this is expected and documented.
 
 ---
 
@@ -592,12 +604,14 @@ Three layers of validation, each independent of the others:
 
 1. **Unit tests (`pytest`).**
    - `tests/test_harmonic_exact.py` — the grid ED reproduces `E_n = n + ½` to
-     `1e-6`; the double-well ground state is even and the first excited state
+     `1e-3`; the double-well ground state is even and the first excited state
      is odd.
    - `tests/test_local_energy.py` — for the analytic Gaussian ground state of
      the HO, the autograd local energy equals `0.5` to `1e-10` at every point.
    - `tests/test_sampler_acceptance.py` — the adaptive MH produces acceptance
      rates in `[0.3, 0.8]` on a Gaussian target.
+   - `tests/test_minsr.py` — CG solver matches `jnp.linalg.solve`.
+   - `tests/test_ansatz_transformer.py` — forward pass produces finite `log|ψ|`.
 
 2. **Independent reference solvers (`src/nqs_vmc/reference/`).**
    - Grid exact diagonalization in NumPy/SciPy — no JAX, no shared code.
@@ -606,21 +620,14 @@ Three layers of validation, each independent of the others:
 
 3. **Statistical comparison across seeds.**
    - Energy error reported as `mean ± std / sqrt(N_seeds)` over 3–5 seeds.
-   - Fidelity computed on the same grid the reference solver used, with no
-     additional interpolation.
-
-If a claim in a paper, a tutorial, or a review says "NQS-VMC reproduces
-`E₀ = 0.5 ± 0.005`", that claim is directly checkable by running
-`run_vmc.py --config configs/ho_ground.yaml` and inspecting
-`results/ho_ground/aggregate.json`.
+   - Fidelity computed on the same grid the reference solver used.
 
 ---
 
 ## Design notes
 
 A few choices distinguish this codebase from a typical "VMC in 100 lines"
-notebook. They are deliberate, and each addresses a specific failure mode of
-naive NQS-VMC.
+notebook.
 
 1. **JAX x64 is enabled globally in `__init__.py`.** Excited-state gaps and
    tunneling splittings are `O(10⁻²)` or smaller; `float32` washes them out.
@@ -630,31 +637,19 @@ naive NQS-VMC.
    makes the kinetic term `-½[tr(Hess log ψ) + |∇ log ψ|²]` numerically clean.
 
 3. **Parity-aware ansätze for the HO.** The first excited state uses
-   `ParityOdd`, so orthogonality is exact by construction. The penalty path is
-   retained and tested separately, but it is not needed for problem 1 — an
-   important distinction that many tutorials miss.
+   `ParityOdd`, so orthogonality is exact by construction.
 
 4. **Exact cusp in the DeepSets ansatz.** The pair function `J(|xᵢ-xⱼ|)`
    contains `-g/2·|xᵢ-xⱼ|` explicitly. Without it, the kinetic local energy
    diverges at `xᵢ = xⱼ`, variance blows up, and training stalls.
 
-5. **Same training loop for Adam and SR.** No duplicated code, no divergence
-   in diagnostics between the two. The optimizer is a strategy object, nothing
-   more.
+5. **Same training loop for Adam, SR, and MinSR.** No duplicated code, no divergence
+   in diagnostics between the three.
 
 6. **Adaptive step size in log domain.** The Metropolis step size evolves as
    `σ ← σ · exp(η(α - α_target))` with `η` small enough to avoid oscillation.
-   Reported in every metrics file so the reader can verify convergence.
 
-7. **Sokal's `τ_int` estimator.** Autocorrelation is not assumed; it is
-   measured. Statistical error bars can then be corrected by `sqrt(2 τ_int)`
-   if the user wants strictly correlated-aware errors.
-
-**Why not a pip-installable library?** Because the goal is pedagogy, not API
-stability. Every file is short enough to read in one sitting, and each design
-decision above corresponds to a comment or a test. If you want an industrial
-NQS library, use [NetKet](https://github.com/netket/netket); if you want to
-understand what NetKet does, read this repository.
+7. **Matrix-Free SR via Conjugate Gradient.** Solves the \(O(P^2)\) linear system in \(O(NP)\) memory.
 
 ---
 
@@ -672,36 +667,24 @@ should. The two valid fixes are:
 
 1. Enforce parity in the ansatz (`type: odd`), which is what the shipped
    config does.
-2. Add an orthogonalization penalty against the exact ground state
-   (`use_ortho: true`, `penalty: 5.0`), which is supported but not needed for
-   problem 1.
+2. Add an orthogonalization penalty against the exact ground state.
 
 ### Double-well tunneling
 
 For deep double wells (`|a| ≫ b`), the gap `E₁ - E₀` becomes exponentially
-small in `√(|a|³/b)`. With an MLP that does not enforce `Z₂` symmetry,
-training may converge to a symmetry-broken wavefunction localized in one well.
-The reported energy will match `E₀` but the fidelity with the true symmetric
-ground state will drop. The `double_well.yaml` config uses a moderate barrier
-and documents this in the metrics: a low fidelity together with a low energy
-is the diagnostic signal.
+small. With an MLP that does not enforce `Z₂` symmetry, training may converge
+to a symmetry-broken wavefunction localized in one well.
 
 ### GPE mode collapse
 
 If `lr` is too large or `diag_shift` in SR is too small, the wavefunction can
 collapse toward a delta function, driving `Var(E_L)` up. The trainer logs
-variance and step size per iteration, so this is immediately visible. The
-shipped config uses `lr = 3e-3` and `diag_shift = 1e-3`, which are stable for
-`g ≤ 5`; larger `g` requires lowering `lr` and increasing `n_iter`.
+variance and step size per iteration, so this is immediately visible.
 
 ### Contact-interaction cusp
 
 Without the exact cusp `-g/2·|xᵢ-xⱼ|` in the DeepSets pair function, the
-local energy is unbounded near `xᵢ = xⱼ`. Training variance grows, and the
-optimizer either stalls or produces a wrong energy. The `two_bosons.yaml`
-config sets `ansatz.cusp: 1.0`, which must be matched to `system.g`. This is
-enforced only by documentation, not by code — a user who changes `g` without
-updating `cusp` will see exactly this failure.
+local energy is unbounded near `xᵢ = xⱼ`.
 
 ---
 
@@ -709,39 +692,26 @@ updating `cusp` will see exactly this failure.
 
 | Aspect | `nqs-vmc` (this repo) | [NetKet](https://github.com/netket/netket) | [FermiNet](https://github.com/deepmind/ferminet) |
 |--------|----------------------|--------------------------------------------|--------------------------------------------------|
-| Scope | 1D reference, 4 problems | General NQS library | Molecular electronic structure |
+| Scope | 1D/2D reference, 6 problems | General NQS library | Molecular electronic structure |
 | Backend | JAX + Flax | JAX or NumPy | JAX |
-| Ansätze | MLP, parity, DeepSets | Many (RBM, CNN, GNN, …) | FermiNet, Psiformer |
+| Ansätze | MLP, parity, DeepSets, Transformer, Autoregressive | Many (RBM, CNN, GNN, …) | FermiNet, Psiformer |
 | Exact references | Yes, NumPy/SciPy only | Optional | — |
 | Tested against ED | Yes (`pytest`) | Partial | — |
-| Lines of code | ~1 500 | ~50 000 | ~5 000 |
 | Target audience | Learning, reproduction | Research, production | Electronic structure |
-
-If you need to compute something novel, use NetKet. If you need to understand
-what NetKet is doing under the hood, read this repo first — it fits in an
-afternoon.
 
 ---
 
 ## Hardware and performance
 
 **Tested hardware.** Reference numbers were produced on a single-socket AMD
-Ryzen 7950X (16 cores, 128 GB RAM) with no GPU. Reproducing the reported
-wall-clock requires a similar machine; energy and variance numbers are
-hardware-independent up to floating-point non-associativity.
+Ryzen 7950X (16 cores, 128 GB RAM) with no GPU.
 
 **JAX configuration.** `jax_enable_x64 = True` is set globally. This is not
 optional — turning it off will change the reported energies at the `1e-3`
-level and make the double-well tunneling splitting unresolvable.
-
-**Threading.** JAX defaults to all available CPU cores. For clean timing
-comparisons, set `XLA_FLAGS=--xla_cpu_multi_thread_eigen=false intra_op_parallelism_threads=1`
-before launching, then scale up deliberately.
+level.
 
 **GPU.** The code runs unmodified on a CUDA 12 GPU. For the small networks
-used here, the GPU is *slower* than CPU due to kernel launch overhead — the
-models have `O(10³)` parameters, not `O(10⁶)`. The GPU is only worth using if
-you scale `n_samples` or `n_chains` by 100×.
+used here, the GPU is *slower* than CPU due to kernel launch overhead.
 
 ---
 
@@ -753,90 +723,59 @@ you scale `n_samples` or `n_chains` by 100×.
 | `E → 0.5` for HO excited state | Ansatz collapsed to ground state | Set `ansatz.type: odd`, or `excited.use_ortho: true` |
 | `Var(E_L)` plateaus above `1e-2` | Network too small or too few samples | Increase `ansatz.hidden` or `sampler.n_samples` |
 | Acceptance rate `< 0.3` | Step size too large | Decrease `sampler.step_size_init` |
-| Acceptance rate `> 0.9` | Step size too small | Increase `sampler.step_size_init` |
-| `τ_int` grows without bound | Step size adapts too aggressively | Slow adaptation in `sampler.py` |
 | SR updates explode | `diag_shift` too small | Increase `diag_shift`, or use `use_diag: true` |
-| SR updates too slow | `diag_shift` too large | Decrease `diag_shift` |
 | Two-boson energy wrong | `cusp` mismatch | Set `ansatz.cusp` equal to `system.g` |
-| Fidelity `< 0.9` on double well | Symmetry breaking | See [Known failure modes](#known-failure-modes) |
 | `pytest` fails on HO exact | NumPy/SciPy version mismatch | See `pyproject.toml` pins |
 
 ---
 
 ## Roadmap
 
-- [x] All four problems with shipped configs
-- [x] Adam and SR optimizers with head-to-head comparison
-- [x] Exact and split-step reference solvers
-- [x] Pytest validation suite
-- [ ] 2D harmonic oscillator (single particle) — proves dimension-agnostic code
-- [ ] 3 interacting bosons in 1D — tests the DeepSets scaling beyond `N=2`
+- [x] 1D HO ground and excited states
+- [x] 2D harmonic oscillator
+- [x] Double well with exact diagonalization
+- [x] Gross–Pitaevskii mean field
+- [x] Two and three interacting bosons
+- [x] Adam, SR, and Matrix-Free SR
+- [x] Transformer and Autoregressive ansätze
+- [x] Ablation and Optuna hyperparameter scripts
+- [x] Docker, DevContainer, and Colab tutorial
 - [ ] Complex-valued wavefunctions (magnetic field, phase)
-- [ ] Optional MCMC exchange sampler (parallel tempering) for double wells
-- [ ] Plotting module with matplotlib recipes for all figures
-- [ ] Docker image for exact reproducibility
+- [ ] Spinless fermions via Slater determinant
 
 ---
 
 ## Reproducing every figure
 
 All experiments in this repository can be reproduced from the shipped configs
-alone. No extra flags, no environment variables, no hidden state.
+alone.
 
 ```bash
 # exact reference spectra
 pytest tests/test_harmonic_exact.py -v
 
 # main table: energy, variance, fidelity per seed
-for cfg in ho_ground ho_excited double_well gross_pitaevskii two_bosons; do
+for cfg in ho_ground ho_excited ho_2d double_well gross_pitaevskii two_bosons three_bosons; do
   python scripts/run_vmc.py --config configs/${cfg}.yaml
 done
 
 # optimizer comparison figure
 python scripts/compare_adam_sr.py --config configs/ho_ground.yaml
 
-# width-sweep figure
-python scripts/sweep_network_size.py --config configs/ho_ground.yaml
+# full ablation table
+python scripts/ablation.py
 ```
-
-Aggregate everything:
-
-```bash
-python - <<'PY'
-import glob
-import json
-
-for f in sorted(glob.glob("results/*/aggregate.json")):
-    agg = json.load(open(f))
-    print(f)
-    for k in ("final_energy", "final_variance", "energy_error", "fidelity"):
-        if k in agg:
-            print(f"  {k:>16}: {agg[k]['mean']:.6e} ± {agg[k]['std']:.1e}")
-PY
-```
-
-Every random number used in training comes from a `jax.random.PRNGKey(seed)`
-with the seed drawn from the config's `seeds` list. There is no global RNG
-state — the code is deterministic per (config, seed) pair up to floating-point
-non-associativity and, on GPU, up to atomic-add ordering.
 
 ---
 
 ## Extending the code
 
 - **New potential.** Add a dataclass to `src/nqs_vmc/systems/` with a
-  `potential(x)` callable and the parameters you need (`omega`, `g`, ...), then
-  register it in `systems/__init__.py`. Nothing else has to change.
+  `potential(x)` callable and register it in `systems/__init__.py`.
 - **New ansatz.** Subclass `flax.linen.Module`, return `log ψ`, register the
-  class in `ANSATZ_REGISTRY` in `ansatz.py`. The trainer and sampler will pick
-  it up automatically.
+  class in `ANSATZ_REGISTRY` in `ansatz.py`.
 - **New optimizer.** Provide a callable with the same signature as
-  `SRUpdater.step` in `optimizers.py`. The training loop does not need to know
-  about it.
-- **Higher dimensions.** The local-energy code already uses `jax.hessian` and
-  `jnp.trace`, so it is dimension-agnostic. The sampler is generic in `dim`.
-  The ansätze need only reflect the right symmetry (translation, rotation,
-  lattice gauge) — the rest of the stack works unchanged.
+  `SRUpdater.step` in `optimizers.py`.
 
 ---
 
@@ -844,12 +783,9 @@ non-associativity and, on GPU, up to atomic-add ordering.
 
 ```bash
 # fast tests
-pytest -q
+pytest -q -m "not slow"
 
-# with parallel workers
-pytest -q -n auto
-
-# type hints (optional, if you install mypy)
+# type hints
 mypy src/nqs_vmc --ignore-missing-imports
 
 # format and lint
@@ -857,12 +793,13 @@ ruff format src scripts tests
 ruff check  src scripts tests
 ```
 
-Contribution guidelines: one feature per PR, always add a test, and never
-regress the exact-spectrum test in `tests/test_harmonic_exact.py`.
-
 ---
 
+## License
 
+MIT. See [`LICENSE`](LICENSE).
+
+---
 
 ## Citation
 
@@ -871,13 +808,12 @@ If you use this code in academic work, please cite it as:
 ```bibtex
 @software{nqsvmc2026,
   title     = {{nqs-vmc}: Neural Quantum States with Variational Monte Carlo in {JAX}},
-  author    = {Nidhal Zitouni and al},
+  author    = {Nidhal Zitouni and contributors},
   year      = {2026},
-  version   = {0.2.0},
+  version   = {0.4.0},
   url       = {https://github.com/NodeBox-Labs/jax-nqs-vmc},
   note      = {Reference implementation with exact-diagonalization and split-step cross-checks}
 }
-
 ```
 
 <p align="center"><em>Built with JAX, Flax and Optax. Reference solvers in pure

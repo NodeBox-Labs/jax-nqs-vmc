@@ -15,7 +15,9 @@ class DoubleWell:
     @property
     def potential(self):
         a, b = self.a, self.b
+
         def V(x):
             r2 = jnp.sum(x**2, axis=-1)
             return a * r2 + b * r2**2
+
         return V

@@ -1,9 +1,12 @@
 """Run a full ablation grid and generate a Markdown table."""
 
-import pandas as pd
 from pathlib import Path
-from nqs_vmc.config import RunConfig
+
+import pandas as pd
 from run_vmc import run_seed
+
+from nqs_vmc.config import RunConfig
+
 
 def main():
     results = []
@@ -19,26 +22,37 @@ def main():
                         system="harmonic",
                         ansatz={"type": ansatz, "hidden": [w, w]},
                         optimizer={"name": opt, "lr": 0.005, "n_iter": 200},
-                        seeds=(seed,)
+                        seeds=(seed,),
                     )
                     outdir = Path(f"results/abl_{ansatz}_{opt}_{w}_{seed}")
                     m = run_seed(cfg, seed, outdir)
-                    results.append({
-                        "ansatz": ansatz, "optimizer": opt, "width": w, "seed": seed,
-                        "energy": m["final_energy"], "variance": m["final_variance"]
-                    })
+                    results.append(
+                        {
+                            "ansatz": ansatz,
+                            "optimizer": opt,
+                            "width": w,
+                            "seed": seed,
+                            "energy": m["final_energy"],
+                            "variance": m["final_variance"],
+                        }
+                    )
 
     df = pd.DataFrame(results)
-    summary = df.groupby(["ansatz", "optimizer", "width"]).agg(
-        mean_energy=("energy", "mean"),
-        std_energy=("energy", "std"),
-        mean_var=("variance", "mean")
-    ).reset_index()
+    summary = (
+        df.groupby(["ansatz", "optimizer", "width"])
+        .agg(
+            mean_energy=("energy", "mean"),
+            std_energy=("energy", "std"),
+            mean_var=("variance", "mean"),
+        )
+        .reset_index()
+    )
 
     md = summary.to_markdown(index=False)
     print(md)
     with open("results/ablation_table.md", "w") as f:
         f.write(md)
+
 
 if __name__ == "__main__":
     main()

@@ -25,6 +25,7 @@ def load_config(path: Path) -> dict:
 def make_logpsi(ansatz):
     def logpsi(params, x):
         return ansatz.apply(params, x)
+
     return logpsi
 
 
@@ -34,8 +35,11 @@ def get_reference(cfg: dict):
         return harmonic_exact(n_max=6, L=ref.get("L", 10.0), n_grid=ref.get("n_grid", 2048))
     if cfg["system"] == "double_well":
         return double_well_exact(
-            a=cfg.get("a", -0.5), b=cfg.get("b", 0.25),
-            n_max=6, L=ref.get("L", 8.0), n_grid=ref.get("n_grid", 2048),
+            a=cfg.get("a", -0.5),
+            b=cfg.get("b", 0.25),
+            n_max=6,
+            L=ref.get("L", 8.0),
+            n_grid=ref.get("n_grid", 2048),
         )
     return None  # for GPE / few-bosons we handle separately
 
@@ -56,14 +60,19 @@ def run_seed(cfg: dict, seed: int, outdir: Path):
             psi0 = ref_vecs[:, 0]
             grid = jnp.asarray(ref_x)
             psi0_j = jnp.asarray(psi0)
+
             def ortho_ref(x):
                 # linear interpolation of ground state on the grid
                 return jnp.interp(x[:, 0], grid, psi0_j)
+
             ortho_ref = ortho_ref
 
     opt_cfg = cfg["optimizer"]
     state = train(
-        logpsi, params, system.potential, system.dim,
+        logpsi,
+        params,
+        system.potential,
+        system.dim,
         g=getattr(system, "g", 0.0),
         n_iter=opt_cfg.get("n_iter", 500),
         n_chains=cfg["sampler"]["n_chains"],
@@ -103,8 +112,10 @@ def run_seed(cfg: dict, seed: int, outdir: Path):
     outdir.mkdir(parents=True, exist_ok=True)
     save_results(outdir, metrics, state.history)
     from nqs_vmc.plotting import plot_convergence
+
     plot_convergence(outdir / "metrics.jsonl", outdir / "convergence.png")
     return metrics
+
 
 def main():
     ap = argparse.ArgumentParser()

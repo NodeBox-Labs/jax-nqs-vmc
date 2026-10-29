@@ -1,7 +1,8 @@
 """Transformer (Psiformer-style) ansatz for continuous space."""
 
 from __future__ import annotations
-from typing import Sequence
+
+from collections.abc import Sequence
 
 import flax.linen as nn
 import jax.numpy as jnp
@@ -36,17 +37,17 @@ class TransformerAnsatz(nn.Module):
         # x is shape (N, n_particles, 1) -> flatten to (N, n_particles)
         n_particles = x.shape[-2]
         h = x.reshape(x.shape[0], n_particles, -1)
-        
+
         # Embed each particle
         h = nn.Dense(self.embed_dim)(h)
-        
+
         # Apply transformer layers
         for _ in range(self.num_layers):
             h = TransformerBlock(self.embed_dim)(h)
-            
+
         # Global pooling (sum over particles)
         h = jnp.sum(h, axis=1)
-        
+
         # Final MLP to scalar log|psi|
         for w in self.hidden:
             h = nn.gelu(nn.Dense(w)(h))

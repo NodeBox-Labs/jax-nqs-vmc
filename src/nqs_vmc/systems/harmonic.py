@@ -14,8 +14,10 @@ class HarmonicOscillator:
     @property
     def potential(self):
         omega = self.omega
+
         def V(x):
             return 0.5 * omega**2 * jnp.sum(x**2, axis=-1)
+
         return V
 
     @property

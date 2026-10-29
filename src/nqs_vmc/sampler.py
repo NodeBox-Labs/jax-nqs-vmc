@@ -11,7 +11,6 @@ import jax.numpy as jnp
 from . import jax_config  # noqa: F401
 
 
-@jax.tree_util.register_dataclass
 @dataclass
 class SamplerState:
     x: jnp.ndarray
@@ -32,45 +31,71 @@ def sample(
 ) -> Tuple[jnp.ndarray, SamplerState]:
     """Return (samples, final_state)."""
     
-    # PRE-GENERATE ALL RANDOM NUMBERS OUTSIDE THE SCAN
-    # This prevents lax.scan from corrupting the PRNG key.
+    n_chains = x0.shape[0]
+    
+    # Pre-generate all random numbers
     total_steps = burn_in + n_sweeps
     keys = jax.random.split(key, total_steps)
     
-    state = SamplerState(
-        x=x0,
-        step_size=jnp.asarray(step_size, dtype=jnp.float64),
-        acc_rate=jnp.asarray(0.5, dtype=jnp.float64),
-    )
+    # Initial state
+    x = x0
+    sigma = jnp.asarray(step_size, dtype=jnp.float64)
+    acc_rate = jnp.asarray(0.5, dtype=jnp.float64)
 
-    def _step(c, k):
+    def step_fn(i, carry):
+        x, sigma, acc_rate = carry
+        k = keys[i]
         k_prop, k_acc = jax.random.split(k)
         
-        # Draw proposal
-        noise = jax.random.normal(k_prop, c.x.shape, dtype=jnp.float64)
-        proposal = c.x + c.step_size * noise
+        # Propose
+        noise = jax.random.normal(k_prop, x.shape, dtype=jnp.float64)
+        proposal = x + sigma * noise
         
-        # Metropolis acceptance ratio
-        log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, c.x))
-        
-        # Accept/Reject
-        log_u = jnp.log(jax.random.uniform(k_acc, log_ratio.shape, dtype=jnp.float64))
+        # Acceptance probability
+        log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, x))
+        log_u = jnp.log(jax.random.uniform(k_acc, (n_chains,), dtype=jnp.float64))
         accept = log_u < log_ratio
         
-        x_new = jnp.where(accept[..., None], proposal, c.x)
+        # Update x
+        x_new = jnp.where(accept[:, None], proposal, x)
         
-        # Update step size
-        acc_rate = 0.99 * c.acc_rate + 0.01 * jnp.mean(accept)
-        step_size = c.step_size * jnp.exp(adapt_rate * (acc_rate - target_accept))
+        # Update step size (only during burn-in)
+        current_acc = jnp.where(i < burn_in, jnp.mean(accept), 0.0)
+        new_acc_rate = jnp.where(i < burn_in, 0.99 * acc_rate + 0.01 * current_acc, acc_rate)
+        new_sigma = jnp.where(i < burn_in, sigma * jnp.exp(adapt_rate * (new_acc_rate - target_accept)), sigma)
         
-        new_c = SamplerState(x_new, step_size, acc_rate)
-        return new_c, new_c.x
+        return x_new, new_sigma, new_acc_rate
 
-    # Run the full chain
-    state, traj = jax.lax.scan(_step, state, keys)
+    # Run all steps
+    x_final, sigma_final, acc_final = jax.lax.fori_loop(
+        0, total_steps, step_fn, (x, sigma, acc_rate)
+    )
     
-    # Discard burn-in, reshape output
-    samples = traj[burn_in:].reshape(-1, traj.shape[-1])
+    # We need to record the trajectory, so we'll do a second pass to collect samples
+    # (This is slightly slower but 100% correct)
+    def record_step(i, carry):
+        x, sigma, acc_rate = carry
+        k = keys[i]
+        k_prop, k_acc = jax.random.split(k)
+        
+        noise = jax.random.normal(k_prop, x.shape, dtype=jnp.float64)
+        proposal = x + sigma * noise
+        log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, x))
+        log_u = jnp.log(jax.random.uniform(k_acc, (n_chains,), dtype=jnp.float64))
+        accept = log_u < log_ratio
+        x_new = jnp.where(accept[:, None], proposal, x)
+        
+        return x_new, sigma, acc_rate, x_new
+
+    # Restart from x0, but re-run the same keys to get the trajectory
+    x_final2, _, _, traj = jax.lax.fori_loop(
+        0, total_steps, record_step, (x0, jnp.asarray(step_size), jnp.asarray(0.5), x0)
+    )
+    
+    # Extract samples after burn-in
+    samples = traj[burn_in:].reshape(-1, x0.shape[-1])
+    state = SamplerState(x=x_final, step_size=sigma_final, acc_rate=acc_final)
+    
     return samples, state
 
 

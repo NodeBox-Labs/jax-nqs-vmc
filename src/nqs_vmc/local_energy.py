@@ -1,16 +1,14 @@
-"""Autograd local energy, correlation-aware statistics, and the orthogonality
-penalty. All numerical guards from Phase 1 live here."""
+"""Autograd local energy."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import Callable, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
 
-from . import jax_config  # noqa: F401 — enables x64
+from . import jax_config  # noqa: F401
 
-#: exp(2·logψ) is clamped to exp(60) ≈ 1e26 to stay well inside float64.
 _LOG_SQ_CLAMP: float = 60.0
 
 
@@ -19,9 +17,10 @@ def make_local_energy(
     potential_fn: Callable[[jnp.ndarray], jnp.ndarray],
     g: float = 0.0,
 ) -> Callable[[dict, jnp.ndarray], jnp.ndarray]:
-
+    
     def _single(params, xi):
-        dim = xi.shape[0]
+        # xi is shape (dim,). Reshape to flat for JAX derivatives.
+        dim = xi.size
         
         def logpsi_scalar(x_flat):
             return logpsi_fn(params, x_flat.reshape(1, dim))[0]
@@ -29,7 +28,7 @@ def make_local_energy(
         grad = jax.grad(logpsi_scalar)(xi)
         hess = jax.hessian(logpsi_scalar)(xi)
         
-        # If dim == 1, the Hessian is a scalar. jnp.trace fails on scalars.
+        # dim == 1 produces a scalar Hessian. jnp.trace would crash.
         lap = hess if dim == 1 else jnp.trace(hess)
             
         kinetic = -0.5 * (lap + jnp.sum(grad * grad))
@@ -37,26 +36,18 @@ def make_local_energy(
         
         if g != 0.0:
             log_psi2 = 2.0 * logpsi_scalar(xi)
-            log_psi2 = jnp.clip(log_psi2, max=60.0)
+            log_psi2 = jnp.clip(log_psi2, max=_LOG_SQ_CLAMP)
             e = e + g * jnp.exp(log_psi2)
         return e
 
+    # vmap over particles
     return jax.vmap(lambda p, xb: jax.vmap(lambda xi: _single(p, xi))(xb), in_axes=(None, 0))
-
 
 
 def energy_and_variance(
     e_loc: jnp.ndarray,
-    tau_int: jnp.ndarray | None = None,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Return ``(E, Var, stderr)``.
-
-    When ``tau_int`` is provided, the standard error is multiplied by
-    ``sqrt(2 * tau_int)`` — the standard correction for a correlated chain
-    with estimator ``Var / n``. Without it, the returned ``stderr`` is the
-    uncorrelated estimate and *understates* the true error by a factor of
-    roughly ``sqrt(2 tau_int)``.
-    """
+    tau_int: Optional[jnp.ndarray] = None,
+) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     n = e_loc.shape[0]
     mean = jnp.mean(e_loc)
     var = jnp.var(e_loc)
@@ -72,16 +63,6 @@ def overlap_squared(
     ref_logpsi: Callable[[jnp.ndarray], jnp.ndarray],
     samples: jnp.ndarray,
 ) -> jnp.ndarray:
-    """Self-normalized estimate of ``|<ψ_ref|ψ>|² / (‖ψ_ref‖² ‖ψ‖²)``.
-
-    Uses self-normalized importance sampling:
-
-        r_i = exp(log ψ_ref(x_i) - log ψ(x_i)),  x_i ~ |ψ|²
-        F = |E[r]|² / E[r²]
-
-    This is the only estimator that is bounded in ``[0, 1]`` by construction.
-    The Phase 1 audit flagged the previous estimator ``|E[r]|²`` as biased.
-    """
     log_psi = logpsi_fn(params, samples)
     log_ref = ref_logpsi(samples)
     ratio = jnp.exp(log_ref - log_psi)

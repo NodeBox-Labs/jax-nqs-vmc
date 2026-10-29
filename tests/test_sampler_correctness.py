@@ -14,7 +14,7 @@ def test_sampler_matches_gaussian():
     key = jax.random.PRNGKey(0)
     samples, _ = sample(logpsi, {}, jnp.zeros((64, 1)), key,
                         n_sweeps=4000, step_size=0.7, target_accept=0.55,
-                        burn_in=500, adapt_rate=0.005)
+                        burn_in=1000, adapt_rate=0.005)
     s = np.asarray(samples).ravel()
     ref = np.random.default_rng(1).standard_normal(s.size)
     _, p = ks_2samp(s, ref)

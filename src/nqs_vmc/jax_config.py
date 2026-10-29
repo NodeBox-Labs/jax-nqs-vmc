@@ -26,9 +26,7 @@ def configure() -> None:
     if os.environ.get("NQS_VMC_DETERMINISTIC", "0") == "1":
         jax.config.update("jax_default_device", jax.devices("cpu")[0])
     if not jax.config.jax_enable_x64:
-        raise RuntimeError(
-            "x64 must be enabled for nqs_vmc; another importer disabled it."
-        )
+        raise RuntimeError("x64 must be enabled for nqs_vmc; another importer disabled it.")
 
 
 configure()

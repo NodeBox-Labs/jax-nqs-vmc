@@ -16,8 +16,7 @@ def test_samples_divisible_by_chains():
 
 def test_cusp_must_match_g():
     with pytest.raises(ValueError, match="cusp"):
-        RunConfig(system="two_bosons", g=1.0,
-                  ansatz=AnsatzConfig(type="deepsets", cusp=0.5))
+        RunConfig(system="two_bosons", g=1.0, ansatz=AnsatzConfig(type="deepsets", cusp=0.5))
 
 
 def test_empty_seeds_rejected():
@@ -42,5 +41,6 @@ def test_odd_grid_rejected():
 
 def test_ortho_requires_penalty():
     from nqs_vmc.config import ExcitedConfig
+
     with pytest.raises(ValueError, match="penalty"):
         ExcitedConfig(use_ortho=True, penalty=0.0)

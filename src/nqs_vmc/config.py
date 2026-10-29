@@ -36,12 +36,16 @@ class AnsatzConfig:
     cusp: float = 0.0
 
     def __post_init__(self) -> None:
-        _require(self.type in ("mlp", "even", "odd", "deepsets"),
-                 f"ansatz.type must be mlp|even|odd|deepsets; got {self.type!r}.")
+        _require(
+            self.type in ("mlp", "even", "odd", "deepsets", "combo", "autoregressive", "transformer"),
+            f"ansatz.type must be mlp|even|odd|deepsets|combo|autoregressive|transformer; got {self.type!r}.",
+        )
         self.hidden = _as_tuple(self.hidden, "ansatz.hidden")
         self.pair_hidden = _as_tuple(self.pair_hidden, "ansatz.pair_hidden")
-        _require(self.activation in ("tanh", "gelu", "silu"),
-                 f"ansatz.activation must be tanh|gelu|silu; got {self.activation!r}.")
+        _require(
+            self.activation in ("tanh", "gelu", "silu"),
+            f"ansatz.activation must be tanh|gelu|silu; got {self.activation!r}.",
+        )
         _require(self.cusp >= 0.0, "ansatz.cusp must be >= 0.")
 
 
@@ -57,9 +61,11 @@ class SamplerConfig:
     def __post_init__(self) -> None:
         _require(self.n_chains > 0, "sampler.n_chains must be > 0.")
         _require(self.n_samples > 0, "sampler.n_samples must be > 0.")
-        _require(self.n_samples % self.n_chains == 0,
-                 f"sampler.n_samples ({self.n_samples}) must be divisible by "
-                 f"sampler.n_chains ({self.n_chains}).")
+        _require(
+            self.n_samples % self.n_chains == 0,
+            f"sampler.n_samples ({self.n_samples}) must be divisible by "
+            f"sampler.n_chains ({self.n_chains}).",
+        )
         _require(0.0 < self.target_accept < 1.0, "target_accept must be in (0, 1).")
         _require(self.step_size_init > 0.0, "step_size_init must be > 0.")
         _require(self.adapt_rate > 0.0, "adapt_rate must be > 0.")
@@ -73,23 +79,29 @@ class OptimizerConfig:
     n_iter: int = 400
     diag_shift: float = 1e-3
     use_diag: bool = False
-    sr_solver: str = "solve"          # solve | lstsq | pinv
-    clip_norm: float = 0.0            # 0 disables clipping
+    sr_solver: str = "solve"  # solve | lstsq | pinv
+    clip_norm: float = 0.0  # 0 disables clipping
     warmup_steps: int = 0
-    schedule: str = "constant"        # constant | cosine
+    schedule: str = "constant"  # constant | cosine
 
     def __post_init__(self) -> None:
-        _require(self.name in ("adam", "sr"),
-                 f"optimizer.name must be adam|sr; got {self.name!r}.")
+        _require(
+            self.name in ("adam", "sr", "minsr"),
+            f"optimizer.name must be adam|sr|minsr; got {self.name!r}.",
+        )
         _require(self.lr > 0.0, "optimizer.lr must be > 0.")
         _require(self.n_iter > 0, "optimizer.n_iter must be > 0.")
         _require(self.diag_shift > 0.0, "optimizer.diag_shift must be > 0.")
-        _require(self.sr_solver in ("solve", "lstsq", "pinv"),
-                 f"optimizer.sr_solver must be solve|lstsq|pinv; got {self.sr_solver!r}.")
+        _require(
+            self.sr_solver in ("solve", "lstsq", "pinv"),
+            f"optimizer.sr_solver must be solve|lstsq|pinv; got {self.sr_solver!r}.",
+        )
         _require(self.clip_norm >= 0.0, "optimizer.clip_norm must be >= 0.")
         _require(self.warmup_steps >= 0, "optimizer.warmup_steps must be >= 0.")
-        _require(self.schedule in ("constant", "cosine"),
-                 f"optimizer.schedule must be constant|cosine; got {self.schedule!r}.")
+        _require(
+            self.schedule in ("constant", "cosine"),
+            f"optimizer.schedule must be constant|cosine; got {self.schedule!r}.",
+        )
 
 
 @dataclass
@@ -99,8 +111,10 @@ class ReferenceConfig:
 
     def __post_init__(self) -> None:
         _require(self.L > 0.0, "reference.L must be > 0.")
-        _require(self.n_grid > 0 and self.n_grid % 2 == 0,
-                 "reference.n_grid must be a positive even integer.")
+        _require(
+            self.n_grid > 0 and self.n_grid % 2 == 0,
+            "reference.n_grid must be a positive even integer.",
+        )
 
 
 @dataclass
@@ -113,8 +127,7 @@ class ExcitedConfig:
         _require(self.level >= 0, "excited.level must be >= 0.")
         _require(self.penalty >= 0.0, "excited.penalty must be >= 0.")
         if self.use_ortho:
-            _require(self.penalty > 0.0,
-                     "excited.use_ortho=True requires excited.penalty > 0.")
+            _require(self.penalty > 0.0, "excited.use_ortho=True requires excited.penalty > 0.")
 
 
 @dataclass
@@ -133,8 +146,10 @@ class RunConfig:
     seeds: tuple[int, ...] = (0, 1, 2)
 
     def __post_init__(self) -> None:
-        _require(self.system in ("harmonic", "double_well", "gpe", "two_bosons"),
-                 f"system must be harmonic|double_well|gpe|two_bosons; got {self.system!r}.")
+        _require(
+            self.system in ("harmonic", "harmonic2d", "double_well", "gpe", "two_bosons"),
+            f"system must be harmonic|harmonic2d|double_well|gpe|two_bosons; got {self.system!r}.",
+        )
         _require(self.dim >= 1, "dim must be >= 1.")
         _require(len(self.seeds) > 0, "seeds must be non-empty.")
         for s in self.seeds:

@@ -1,7 +1,8 @@
 """Autoregressive Neural Quantum State (exact sampling, no MCMC)."""
 
 from __future__ import annotations
-from typing import Sequence
+
+from collections.abc import Sequence
 
 import flax.linen as nn
 import jax
@@ -33,26 +34,28 @@ class AutoregressiveMLP(nn.Module):
         # Returns log_probabilities of shape (N, n_particles, n_bins)
         n = self.n_particles
         h = x
-        
-        # To enforce autoregression, we mask the weights so that the prediction for 
+
+        # To enforce autoregression, we mask the weights so that the prediction for
         # particle i only sees particles < i.
         for w in self.hidden:
             # Create a strictly lower triangular mask
             mask = jnp.tril(jnp.ones((h.shape[-1], w)), k=-1)
             h = nn.tanh(MaskedDense(w, mask)(h))
-            
+
         # Output layer: predict bins for each particle
         out_mask = jnp.tril(jnp.ones((h.shape[-1], n * self.n_bins)), k=-1)
         out = MaskedDense(n * self.n_bins, out_mask)(h)
-        
+
         # Reshape to (N, n_particles, n_bins) and normalize over bins
         logits = out.reshape(-1, n, self.n_bins)
         return logits - logsumexp(logits, axis=-1, keepdims=True)
 
     def sample(self, params, key, n_samples):
         """Exact autoregressive sampling."""
+
         def _sample_one(key):
             x = jnp.zeros(self.n_particles, dtype=jnp.int32)
+
             def _sample_step(i, val):
                 x_so_far, k = val
                 k, subk = jax.random.split(k)
@@ -63,6 +66,7 @@ class AutoregressiveMLP(nn.Module):
                 new_x = jax.random.categorical(subk, logits)
                 x_new = x_so_far.at[i].set(new_x)
                 return x_new, k
+
             x, _ = jax.lax.fori_loop(0, self.n_particles, _sample_step, (x, key))
             return x
 

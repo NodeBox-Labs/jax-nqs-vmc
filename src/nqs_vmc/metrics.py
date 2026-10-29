@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Dict
 
 
 class JsonlLogger:
@@ -12,7 +11,7 @@ class JsonlLogger:
         path.parent.mkdir(parents=True, exist_ok=True)
         self._fh = open(path, "a", buffering=1)
 
-    def log(self, record: Dict[str, float]) -> None:
+    def log(self, record: dict[str, float]) -> None:
         self._fh.write(json.dumps(record, separators=(",", ":")) + "\n")
 
     def close(self) -> None:
@@ -20,9 +19,9 @@ class JsonlLogger:
             self._fh.close()
 
 
-def replay(path: Path) -> Dict[str, list]:
+def replay(path: Path) -> dict[str, list]:
     """Return a dict-of-columns for plotting."""
-    cols: Dict[str, list] = {}
+    cols: dict[str, list] = {}
     if not path.exists():
         return cols
     with open(path) as f:

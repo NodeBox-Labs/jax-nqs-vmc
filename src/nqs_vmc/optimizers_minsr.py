@@ -1,15 +1,22 @@
 """Matrix-Free Stochastic Reconfiguration (CG and MinSR)."""
 
 from __future__ import annotations
-from typing import Callable, Tuple
+
+from collections.abc import Callable
 
 import jax
 import jax.numpy as jnp
-import optax
 
 
-def _cg_solve(matvec: Callable, b: jnp.ndarray, x0: jnp.ndarray, tol: float = 1e-5, max_iter: int = 100) -> jnp.ndarray:
+def _cg_solve(
+    matvec: Callable,
+    b: jnp.ndarray,
+    x0: jnp.ndarray,
+    tol: float = 1e-5,
+    max_iter: int = 100,
+) -> jnp.ndarray:
     """Conjugate Gradient solver."""
+
     def body_fun(val):
         x, r, p, rsold, i = val
         Ap = matvec(p)
@@ -43,15 +50,16 @@ class MatrixFreeSR:
 
     def update(self, params, state, S_F):
         # Here, S_F is not a matrix. It is (O, F) where O is shape (N, P)
-        # and F is shape (P,). 
-        O, F = S_F
-        
+        # and F is shape (P,).
+        O, F = S_F  # noqa: E741
+
         # O is the Jacobian: O_{i, \theta} = \partial \log \psi(x_i) / \partial \theta
         O_centered = O - jnp.mean(O, axis=0)
         F_centered = F - jnp.mean(F)
-        
+
         # S is implicitly defined. S * v = (O^T (O v)) / N + diag_shift * v
         n_samples = O.shape[0]
+
         def matvec(v):
             Ov = jnp.dot(O_centered, v)
             return jnp.dot(O_centered.T, Ov) / n_samples + self.diag_shift * v
@@ -59,16 +67,17 @@ class MatrixFreeSR:
         # Solve S delta = F
         b = jnp.dot(O_centered.T, F_centered) / n_samples
         delta = _cg_solve(matvec, b, jnp.zeros_like(b), max_iter=self.max_iter)
-        
+
         # Apply update
         delta = -self.lr * delta
         return _apply_flat_update(params, delta), None
+
 
 def _apply_flat_update(params: dict, delta: jnp.ndarray) -> dict:
     leaves, treedef = jax.tree_util.tree_flatten(params)
     out, i = [], 0
     for leaf in leaves:
         n = leaf.size
-        out.append(delta[i:i + n].reshape(leaf.shape))
+        out.append(delta[i : i + n].reshape(leaf.shape))
         i += n
     return jax.tree_util.tree_unflatten(treedef, out)

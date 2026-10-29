@@ -14,6 +14,7 @@ class TwoBosons:
     We use the standard regularized contact (finite grid in the reference
     solver; the NQS ansatz includes the exact cusp −g/2·|x₁−x₂| in the Jastrow).
     """
+
     omega: float = 1.0
     g: float = 1.0
     N: int = 2
@@ -22,6 +23,8 @@ class TwoBosons:
     @property
     def potential(self):
         omega = self.omega
+
         def V(x):
             return 0.5 * omega**2 * jnp.sum(x**2, axis=-1)
+
         return V

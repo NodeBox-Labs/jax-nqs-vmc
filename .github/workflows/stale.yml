@@ -1,0 +1,33 @@
+name: Close stale issues and PRs
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-issue-stale: 60
+          days-before-issue-close: 14
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has
+            not had recent activity. It will be closed in 14 days if no
+            further activity occurs. If the issue is still relevant, please
+            comment with any updates.
+          close-issue-message: |
+            Closed as stale. Feel free to reopen if the problem persists.
+          stale-pr-message: |
+            This PR has been marked stale. Please rebase on `main` and
+            re-run CI to keep it mergeable.
+          exempt-issue-labels: "pinned,security,good first issue"
+          exempt-pr-labels: "pinned,security"
+          operations-per-run: 30

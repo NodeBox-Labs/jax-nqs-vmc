@@ -1,0 +1,53 @@
+# Bug report template
+name: Bug report
+description: Something is wrong or produces NaN
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the full traceback or the exact assertion that failed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: YAML config
+      description: Paste the config that reproduces the bug.
+      render: yaml
+    validations:
+      required: true
+
+  - type: input
+    id: seed
+    attributes:
+      label: Seed
+      placeholder: "0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: Output of `python -c "import jax, numpy, flax, optax; print(jax.__version__, numpy.__version__, flax.__version__, optax.__version__)"`.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "Ubuntu 22.04 / macOS 14.4 / Windows 11"
+    validations:
+      required: true

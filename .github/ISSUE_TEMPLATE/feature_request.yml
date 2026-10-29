@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a new problem, ansatz, or optimizer
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: physics
+    attributes:
+      label: Physics / ML motivation
+      description: |
+        What does this add? For physics: which Hamiltonian, which units,
+        which reference solution. For ML: which failure mode of the
+        current code does it address?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reference
+    attributes:
+      label: Reference solution
+      description: |
+        How will we validate this? Cite a paper, a textbook, or an exact
+        analytic formula. A new feature that cannot be validated against
+        an independent reference will not be merged.
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: |
+        Which files would be touched? Is this one PR or several? Does it
+        change any public signature?

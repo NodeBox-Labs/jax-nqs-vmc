@@ -1,0 +1,69 @@
+# slow tests + Windows + GPU nightly
+name: Nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * *"   # 03:00 UTC every day
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  slow-windows:
+    name: slow tests on Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest -q -m slow
+
+  full-seeds:
+    name: full 5-seed runs (Linux py3.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - name: Run all five problems
+        run: |
+          for cfg in ho_ground ho_excited double_well gross_pitaevskii two_bosons; do
+            python scripts/run_vmc.py --config configs/${cfg}.yaml
+          done
+      - name: Check reference numbers
+        run: |
+          python - <<'PY'
+          import json, sys
+          checks = {
+              "ho_ground":     (0.500, 0.02),
+              "ho_excited":    (1.500, 0.02),
+              "double_well":   (None,  None),
+              "gross_pitaevskii": (None, None),
+              "two_bosons":    (None,  None),
+          }
+          fail = False
+          for name, (target, tol) in checks.items():
+              if target is None:
+                  continue
+              agg = json.load(open(f"results/{name}/aggregate.json"))
+              got = agg["final_energy"]["mean"]
+              ok = abs(got - target) <= tol
+              print(f"{name:>18}: {got:.4f}  (target {target} ± {tol})  {'OK' if ok else 'FAIL'}")
+              fail |= not ok
+          sys.exit(1 if fail else 0)
+          PY
+      - name: Upload nightly results
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-results
+          path: results/**/aggregate.json
+          retention-days: 14

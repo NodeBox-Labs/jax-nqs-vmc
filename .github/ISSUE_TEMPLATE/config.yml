@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion
+    url: https://github.com/<your-user>/jax-nqs-vmc/discussions
+    about: Ask a question or discuss a design choice
+  - name: NetKet
+    url: https://github.com/netket/netket
+    about: A production NQS library (this repo is a reference, not a competitor)

@@ -110,14 +110,18 @@ def integrated_autocorr_time(values: jnp.ndarray, c: float = 5.0) -> jnp.ndarray
     n = values.shape[0]
     max_lag = min(n // 2, 2000)
 
-    def acf(lag):
-        # JAX vmap cannot handle dynamic slicing (x[:n-lag]).
-        # Instead, we pad x with zeros at the front by 'lag' elements,
-        # then use a static slice to get the shifted version.
-        x_padded = jnp.pad(x, (lag, 0), mode='constant')
-        return jnp.sum(x_padded[:n] * x) / ((n - lag) * var)
+    # Use a Python loop instead of jax.vmap because jnp.pad and dynamic slicing
+    # require concrete integers, which vmap cannot provide.
+    acfs = []
+    for lag in range(max_lag):
+        if lag == 0:
+            acfs.append(jnp.asarray(1.0))
+        else:
+            x_padded = jnp.pad(x, (lag, 0), mode="constant")
+            acf = jnp.sum(x_padded[:n] * x) / ((n - lag) * var)
+            acfs.append(acf)
 
-    acfs = jax.vmap(acf)(jnp.arange(max_lag))
+    acfs = jnp.stack(acfs)
     tau = 1.0 + 2.0 * jnp.cumsum(acfs)
     m = jnp.arange(max_lag) + 1
     idx = jnp.argmax(m >= c * tau)

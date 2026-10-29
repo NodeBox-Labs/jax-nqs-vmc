@@ -32,3 +32,17 @@ def exact_1d(
         if vecs[i, j] < 0:
             vecs[:, j] *= -1
     return vals, x, vecs
+
+
+def harmonic_exact(
+    omega: float = 1.0, n_max: int = 6, L: float = 10.0, n_grid: int = 2048
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Exact diagonalization for 1D harmonic oscillator."""
+    return exact_1d(lambda x: 0.5 * omega**2 * x**2, L=L, n_grid=n_grid, k=n_max)
+
+
+def double_well_exact(
+    a: float = -0.5, b: float = 0.25, n_max: int = 6, L: float = 8.0, n_grid: int = 2048
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Exact diagonalization for 1D double well potential V(x) = a*x^2 + b*x^4."""
+    return exact_1d(lambda x: a * x**2 + b * x**4, L=L, n_grid=n_grid, k=n_max)

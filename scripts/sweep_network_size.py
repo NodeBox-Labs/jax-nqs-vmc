@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import yaml
 from run_vmc import run_seed
+
+from nqs_vmc.config import AnsatzConfig, RunConfig
 
 
 def main():
@@ -18,16 +20,21 @@ def main():
     ap.add_argument("--widths", nargs="+", type=int, default=[16, 32, 64, 128])
     args = ap.parse_args()
 
-    with open(args.config) as f:
-        base_cfg = yaml.safe_load(f)
+    base_cfg = RunConfig.from_yaml(args.config)
 
     curves = {"width": [], "energy_error": [], "variance": [], "fidelity": []}
     for w in args.widths:
-        cfg = json.loads(json.dumps(base_cfg))
-        cfg["ansatz"]["hidden"] = [w, w]
+        cfg = copy.deepcopy(base_cfg)
+        cfg.ansatz = AnsatzConfig(
+            type=cfg.ansatz.type,
+            hidden=(w, w),
+            activation=cfg.ansatz.activation,
+            pair_hidden=cfg.ansatz.pair_hidden,
+            cusp=cfg.ansatz.cusp,
+        )
         outdir = Path("results") / f"sweep_{args.config.stem}" / f"w{w}"
         ms = []
-        for seed in cfg["seeds"]:
+        for seed in cfg.seeds:
             m = run_seed(cfg, seed, outdir / str(seed))
             ms.append(m)
         errs = np.array([m.get("energy_error", np.nan) for m in ms])

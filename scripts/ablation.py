@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 from run_vmc import run_seed
 
-from nqs_vmc.config import RunConfig
+from nqs_vmc.config import AnsatzConfig, OptimizerConfig, RunConfig
 
 
 def main():
@@ -14,21 +14,23 @@ def main():
     optimizers = ["adam", "sr", "minsr"]
     widths = [32, 64]
 
-    for ansatz in ansatze:
+    base = RunConfig(system="harmonic")
+
+    for ansatz_type in ansatze:
         for opt in optimizers:
             for w in widths:
                 for seed in [0, 1, 2]:
                     cfg = RunConfig(
                         system="harmonic",
-                        ansatz={"type": ansatz, "hidden": [w, w]},
-                        optimizer={"name": opt, "lr": 0.005, "n_iter": 200},
+                        ansatz=AnsatzConfig(type=ansatz_type, hidden=(w, w)),
+                        optimizer=OptimizerConfig(name=opt, lr=0.005, n_iter=200),
                         seeds=(seed,),
                     )
-                    outdir = Path(f"results/abl_{ansatz}_{opt}_{w}_{seed}")
+                    outdir = Path(f"results/abl_{ansatz_type}_{opt}_{w}_{seed}")
                     m = run_seed(cfg, seed, outdir)
                     results.append(
                         {
-                            "ansatz": ansatz,
+                            "ansatz": ansatz_type,
                             "optimizer": opt,
                             "width": w,
                             "seed": seed,

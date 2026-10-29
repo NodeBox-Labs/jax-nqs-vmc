@@ -3,13 +3,14 @@ and learning-rate schedules."""
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 import jax
 import jax.numpy as jnp
 import optax
 
 from . import jax_config  # noqa: F401
+from .optimizers_minsr import MatrixFreeSR
 
 
 class Optimizer(Protocol):
@@ -22,7 +23,9 @@ def _make_schedule(base_lr: float, warmup_steps: int, schedule: str, n_iter: int
         return lambda step: base_lr
     if schedule == "constant":
         return optax.warmup_constant_schedule(
-            init_value=0.0, peak_value=base_lr, warmup_steps=warmup_steps,
+            init_value=0.0,
+            peak_value=base_lr,
+            warmup_steps=warmup_steps,
         )
     # cosine
     return optax.warmup_cosine_decay_schedule(
@@ -102,7 +105,7 @@ def _apply_flat_update(params: dict, delta: jnp.ndarray) -> dict:
     out, i = [], 0
     for leaf in leaves:
         n = leaf.size
-        out.append(delta[i:i + n].reshape(leaf.shape))
+        out.append(delta[i : i + n].reshape(leaf.shape))
         i += n
     return jax.tree_util.tree_unflatten(treedef, out)
 
@@ -110,21 +113,21 @@ def _apply_flat_update(params: dict, delta: jnp.ndarray) -> dict:
 def quantum_geometric_tensor(logpsi_fn, params, samples, e_loc):
     """Return ``(S, F)`` for the SR update. Memory: ``O(N·P)``."""
     leaves, treedef = jax.tree_util.tree_flatten(params)
-    shapes = [l.shape for l in leaves]
-    p0 = jnp.concatenate([l.ravel() for l in leaves])
+    shapes = [leaf.shape for leaf in leaves]
+    p0 = jnp.concatenate([leaf.ravel() for leaf in leaves])
 
     def logpsi_flat(pflat, x):
         ps, i = [], 0
         for s in shapes:
             n = int(jnp.prod(jnp.asarray(s)))
-            ps.append(pflat[i:i + n].reshape(s))
+            ps.append(pflat[i : i + n].reshape(s))
             i += n
         return logpsi_fn(jax.tree_util.tree_unflatten(treedef, ps), x)
 
     def O_fn(pflat, x):
         return jax.jacrev(lambda p: logpsi_flat(p, x.reshape(1, -1))[0])(pflat)
 
-    O = jax.vmap(O_fn, in_axes=(None, 0))(p0, samples)
+    O = jax.vmap(O_fn, in_axes=(None, 0))(p0, samples)  # noqa: E741
     O_c = O - O.mean(0)
     E_c = e_loc - e_loc.mean()
     S = (O_c.T @ O_c) / samples.shape[0]
@@ -132,8 +135,7 @@ def quantum_geometric_tensor(logpsi_fn, params, samples, e_loc):
     return S, F
 
 
-def build_optimizer(cfg) -> Optimizer:
-
+def build_optimizer(cfg: Any) -> Optimizer:
     if cfg.name == "adam":
         return AdamOpt(
             lr=cfg.lr,
@@ -142,10 +144,14 @@ def build_optimizer(cfg) -> Optimizer:
             warmup_steps=cfg.warmup_steps,
             n_iter=cfg.n_iter,
         )
-    return SRUpdater(
-        lr=cfg.lr,
-        diag_shift=cfg.diag_shift,
-        use_diag=cfg.use_diag,
-        solver=cfg.sr_solver,
-        clip_norm=cfg.clip_norm,
-    )
+    if cfg.name == "sr":
+        return SRUpdater(
+            lr=cfg.lr,
+            diag_shift=cfg.diag_shift,
+            use_diag=cfg.use_diag,
+            solver=cfg.sr_solver,
+            clip_norm=cfg.clip_norm,
+        )
+    if cfg.name == "minsr":
+        return MatrixFreeSR(lr=cfg.lr, diag_shift=cfg.diag_shift)
+    raise ValueError(f"Unknown optimizer {cfg.name}")

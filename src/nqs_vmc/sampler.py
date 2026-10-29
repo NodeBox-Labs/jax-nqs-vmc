@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -28,15 +28,15 @@ def sample(
     target_accept: float,
     burn_in: int,
     adapt_rate: float,
-) -> Tuple[jnp.ndarray, SamplerState]:
+) -> tuple[jnp.ndarray, SamplerState]:
     """Return (samples, final_state)."""
-    
+
     n_chains = x0.shape[0]
-    
+
     # Pre-generate all random numbers
     total_steps = burn_in + n_sweeps
     keys = jax.random.split(key, total_steps)
-    
+
     # Initial state
     x = x0
     sigma = jnp.asarray(step_size, dtype=jnp.float64)
@@ -46,44 +46,46 @@ def sample(
         x, sigma, acc_rate = carry
         k = keys[i]
         k_prop, k_acc = jax.random.split(k)
-        
+
         # Propose
         noise = jax.random.normal(k_prop, x.shape, dtype=jnp.float64)
         proposal = x + sigma * noise
-        
+
         # Acceptance probability
         log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, x))
         log_u = jnp.log(jax.random.uniform(k_acc, (n_chains,), dtype=jnp.float64))
         accept = log_u < log_ratio
-        
+
         # Update x
         x_new = jnp.where(accept[:, None], proposal, x)
-        
+
         # Update step size (only during burn-in)
         current_acc = jnp.where(i < burn_in, jnp.mean(accept), 0.0)
         new_acc_rate = jnp.where(i < burn_in, 0.99 * acc_rate + 0.01 * current_acc, acc_rate)
-        new_sigma = jnp.where(i < burn_in, sigma * jnp.exp(adapt_rate * (new_acc_rate - target_accept)), sigma)
-        
+        new_sigma = jnp.where(
+            i < burn_in,
+            sigma * jnp.exp(adapt_rate * (new_acc_rate - target_accept)),
+            sigma,
+        )
+
         return x_new, new_sigma, new_acc_rate
 
     # Run burn-in to find good step size
-    x_burned, sigma_final, acc_final = jax.lax.fori_loop(
-        0, burn_in, step_fn, (x, sigma, acc_rate)
-    )
-    
+    x_burned, sigma_final, acc_final = jax.lax.fori_loop(0, burn_in, step_fn, (x, sigma, acc_rate))
+
     # Now run production and record the trajectory
     def record_step(i, carry):
         x, sigma, acc_rate, _ = carry  # unpack 4 elements
         k = keys[burn_in + i]
         k_prop, k_acc = jax.random.split(k)
-        
+
         noise = jax.random.normal(k_prop, x.shape, dtype=jnp.float64)
         proposal = x + sigma * noise
         log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, x))
         log_u = jnp.log(jax.random.uniform(k_acc, (n_chains,), dtype=jnp.float64))
         accept = log_u < log_ratio
         x_new = jnp.where(accept[:, None], proposal, x)
-        
+
         # We only record x_new, step size and acc_rate stay fixed
         return x_new, sigma, acc_rate, x_new
 
@@ -91,11 +93,11 @@ def sample(
     _, _, _, traj = jax.lax.fori_loop(
         0, n_sweeps, record_step, (x_burned, sigma_final, acc_final, x_burned)
     )
-    
+
     # Extract samples (traj shape is (n_sweeps, n_chains, dim))
     samples = traj.reshape(-1, x0.shape[-1])
     state = SamplerState(x=x_burned, step_size=sigma_final, acc_rate=acc_final)
-    
+
     return samples, state
 
 

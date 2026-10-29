@@ -1,0 +1,23 @@
+system: harmonic2d
+omega: 1.0
+dim: 2
+
+ansatz:
+  type: even  # The MLP will just take a shape (N, 2) input
+  hidden: [64, 64]
+  activation: tanh
+
+sampler:
+  n_chains: 128
+  n_samples: 8192
+  step_size_init: 0.5
+  target_accept: 0.55
+  burn_in: 200
+  adapt_rate: 0.005
+
+optimizer:
+  name: adam
+  lr: 0.005
+  n_iter: 400
+
+seeds: [0, 1]

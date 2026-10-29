@@ -22,10 +22,6 @@ def gpe_imaginary_time(
     V = 0.5 * omega**2 * x**2
     K = 0.5 * k**2  # kinetic dispersion
 
-    def half_nonlin(psi, sign):
-        V_eff = V + g * np.abs(psi) ** 2
-        return psi * np.exp(sign * 0.5 * (-0.5j * 0) ).real if False else psi  # noqa
-
     mu_prev = np.inf
     mus = []
     for step in range(n_steps):
@@ -57,7 +53,6 @@ def _chemical_potential(psi, x, V, g):
     dpsi = np.gradient(psi, dx)
     kin = 0.5 * np.trapz(np.abs(dpsi) ** 2, x)
     pot = np.trapz(V * np.abs(psi) ** 2, x)
-    inter = 0.5 * g * np.trapz(np.abs(psi) ** 4, x)
     n = np.trapz(np.abs(psi) ** 2, x)
     # E = kin+pot+inter; μ = E + (g/2) ∫|ψ|⁴ ... but for uniform we use
     # μ ≈ E/N for small N; here N=1 so μ = E + (g/2)∫|ψ|⁴ - (g)∫|ψ|⁴ = kin+pot-(g/2)∫|ψ|⁴

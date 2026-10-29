@@ -22,8 +22,10 @@ def fidelity_from_grid(logpsi_fn, params, x_grid: jnp.ndarray, ref_psi_grid: np.
 
 def aggregate_seeds(results: Iterable[dict]) -> dict:
     results = list(results)
+
     def _stack(key):
         return np.array([r[key] for r in results])
+
     keys = [k for k in results[0] if isinstance(results[0][k], (int, float))]
     out = {}
     for k in keys:

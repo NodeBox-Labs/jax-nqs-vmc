@@ -1,6 +1,8 @@
 import jax.numpy as jnp
 import numpy as np
+
 from nqs_vmc.local_energy import make_local_energy
+
 
 def test_local_energy_gaussian():
     # ψ(x) ∝ exp(-x²/2) is exact ground state of HO with E = 0.5

@@ -16,8 +16,6 @@ def two_boson_energy_grid(
     V = diags([0.5 * omega**2 * x**2], offsets=[0], format="csr")
     H1 = (T + V).tocsr()
     H = kron(H1, identity(n)) + kron(identity(n), H1)
-    # Contact interaction: use a discrete delta with weight 1/dx
-    delta = diags([np.full(n, 1.0 / dx)], offsets=[0], format="csr")
     # Build 2D operator g δ(x1-x2) via mask diag
     X, Y = np.meshgrid(x, x, indexing="ij")
     mask = np.exp(-0.5 * ((X - Y) / dx) ** 2)  # smeared delta (weight ~1)

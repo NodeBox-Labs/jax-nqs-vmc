@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
+import copy
 from pathlib import Path
 
-import yaml
 from run_vmc import run_seed
 
+from nqs_vmc.config import RunConfig
 from nqs_vmc.diagnostics import aggregate_seeds
 
 
@@ -15,16 +16,15 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True, type=Path)
     args = ap.parse_args()
-    with open(args.config) as f:
-        base_cfg = yaml.safe_load(f)
+
+    base_cfg = RunConfig.from_yaml(args.config)
 
     results = {"adam": [], "sr": []}
     for opt_name in ("adam", "sr"):
-        cfg = dict(base_cfg)
-        cfg["optimizer"] = dict(base_cfg["optimizer"])
-        cfg["optimizer"]["name"] = opt_name
+        cfg = copy.deepcopy(base_cfg)
+        cfg.optimizer.name = opt_name
         outdir = Path("results") / f"compare_{args.config.stem}" / opt_name
-        for seed in cfg["seeds"]:
+        for seed in cfg.seeds:
             m = run_seed(cfg, seed, outdir / str(seed))
             results[opt_name].append(m)
 

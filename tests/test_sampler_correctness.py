@@ -8,21 +8,30 @@ from nqs_vmc.sampler import sample
 
 def test_sampler_matches_gaussian():
     """Sample from ψ(x) = exp(-x²/2); compare to N(0, 1) via KS."""
+
     def logpsi(p, x):
         return -0.5 * jnp.sum(x**2, axis=-1)
 
     key = jax.random.PRNGKey(42)
-    
-    samples, _ = sample(logpsi, {}, jnp.zeros((64, 1)), key,
-                        n_sweeps=5000, step_size=0.7, target_accept=0.55,
-                        burn_in=2000, adapt_rate=0.0)
-                        
+
+    samples, _ = sample(
+        logpsi,
+        {},
+        jnp.zeros((64, 1)),
+        key,
+        n_sweeps=5000,
+        step_size=0.7,
+        target_accept=0.55,
+        burn_in=2000,
+        adapt_rate=0.0,
+    )
+
     s = np.asarray(samples).ravel()
-    
+
     # A perfectly-tuned MH sampler should produce samples with std ~ 1.0
     # If the chain is frozen, std = 0.0
     assert np.std(s) > 0.5, f"Chain is frozen: std={np.std(s):.4f}"
-    
+
     # KS test with a looser threshold
     ref = np.random.default_rng(42).standard_normal(s.size)
     _, p = ks_2samp(s, ref)

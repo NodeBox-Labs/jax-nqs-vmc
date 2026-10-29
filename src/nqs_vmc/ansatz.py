@@ -8,9 +8,14 @@ explicit symmetry factors.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import Any
 
 import flax.linen as nn
 import jax.numpy as jnp
+
+from .ansatz_autoregressive import AutoregressiveMLP
+from .ansatz_transformer import TransformerAnsatz
+from .config import AnsatzConfig
 
 
 def _act(name: str):
@@ -125,20 +130,36 @@ class LinearCombination(nn.Module):
         return jnp.log(jnp.abs(psi) + 1e-30)
 
 
-ANSATZ_REGISTRY = {
+ANSATZ_REGISTRY: dict[str, type[nn.Module]] = {
     "mlp": MLP,
     "even": ParityEven,
     "odd": ParityOdd,
     "deepsets": DeepSets,
     "combo": LinearCombination,
+    "autoregressive": AutoregressiveMLP,
+    "transformer": TransformerAnsatz,
 }
 
+REGISTRY = ANSATZ_REGISTRY
 
-def build_ansatz(cfg: dict) -> nn.Module:
-    kind = cfg["type"]
-    kwargs = {k: v for k, v in cfg.items() if k != "type"}
-    if isinstance(kwargs.get("hidden"), list):
-        kwargs["hidden"] = tuple(kwargs["hidden"])
-    if isinstance(kwargs.get("pair_hidden"), list):
-        kwargs["pair_hidden"] = tuple(kwargs["pair_hidden"])
+
+def build_ansatz(cfg: dict[str, Any] | AnsatzConfig) -> nn.Module:
+    if isinstance(cfg, AnsatzConfig):
+        kind = cfg.type
+        kwargs: dict[str, Any] = {
+            "hidden": tuple(cfg.hidden),
+            "activation": cfg.activation,
+        }
+        if cfg.type == "deepsets":
+            kwargs["pair_hidden"] = tuple(cfg.pair_hidden)
+            kwargs["cusp"] = cfg.cusp
+        elif cfg.type == "transformer":
+            kwargs["num_layers"] = 2
+    else:
+        kind = cfg["type"]
+        kwargs = {k: v for k, v in cfg.items() if k != "type"}
+        if isinstance(kwargs.get("hidden"), list):
+            kwargs["hidden"] = tuple(kwargs["hidden"])
+        if isinstance(kwargs.get("pair_hidden"), list):
+            kwargs["pair_hidden"] = tuple(kwargs["pair_hidden"])
     return ANSATZ_REGISTRY[kind](**kwargs)

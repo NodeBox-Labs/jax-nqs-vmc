@@ -40,7 +40,10 @@ class MLP(nn.Module):
         h = x
         for width in self.hidden:
             h = act(nn.Dense(width)(h))
-        return nn.Dense(1)(h).squeeze(-1)
+        # Initialize the final layer to zero. This is critical for VMC:
+        # it ensures the initial wavefunction is flat, preventing the kinetic 
+        # energy from exploding at step 0.
+        return nn.Dense(1, kernel_init=nn.initializers.zeros)(h).squeeze(-1)
 
 
 class ParityEven(nn.Module):
@@ -67,32 +70,24 @@ class ParityOdd(nn.Module):
 
 
 class DeepSets(nn.Module):
-    """Permutation-symmetric ansatz for N particles in 1D.
-
-    log ψ(x_1..x_N) = ρ( Σ_i φ(x_i), Σ_{i<j} J(|x_i - x_j|) )
-
-    With a learned Jastrow-like pair function J for the contact cusp.
-    """
+    """Permutation-symmetric ansatz for N particles in 1D."""
 
     hidden: Sequence[int] = (64, 64)
     pair_hidden: Sequence[int] = (32, 32)
     activation: str = "tanh"
-    cusp: float = 0.0  # contact interaction strength g -> exact cusp -g/2 |x_i-x_j|
+    cusp: float = 0.0
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        # x: (..., N, 1)
         act = _act(self.activation)
         n = x.shape[-2]
 
-        # single-particle embedding
         h = x
         for w in self.hidden:
-            h = act(nn.Dense(w)(h))
-        phi = nn.Dense(1)(h).squeeze(-1)  # (..., N)
-        single = jnp.sum(phi, axis=-1)  # (...,)
+            h = act(nn.Dense(w, kernel_init=nn.initializers.zeros)(h))
+        phi = nn.Dense(1, kernel_init=nn.initializers.zeros)(h).squeeze(-1)
+        single = jnp.sum(phi, axis=-1)
 
-        # pair embedding (upper triangle)
         iu = jnp.triu_indices(n, k=1)
         xi = x[..., iu[0], 0]
         xj = x[..., iu[1], 0]
@@ -100,19 +95,18 @@ class DeepSets(nn.Module):
         p = r[..., None]
         for w in self.pair_hidden:
             p = act(nn.Dense(w)(p))
-        pair = nn.Dense(1)(p).squeeze(-1)
-        # exact cusp: exp(-g/2 |x_i - x_j|) -> log contribution -g/2 * |x_i-x_j|
+        pair = nn.Dense(1, kernel_init=nn.initializers.zeros)(p).squeeze(-1)
         pair = pair - 0.5 * self.cusp * r
         pairs = jnp.sum(pair, axis=-1)
 
         z = (single + pairs)[..., None]
         for w in self.hidden:
             z = act(nn.Dense(w)(z))
-        return nn.Dense(1)(z).squeeze(-1)
+        return nn.Dense(1, kernel_init=nn.initializers.zeros)(z).squeeze(-1)
 
 
 class LinearCombination(nn.Module):
-    """ψ = ψ_0 + α ψ_1 for excited-state searches; α is a learnable scalar."""
+    """ψ = ψ_0 + α ψ_1 for excited-state searches."""
 
     hidden: Sequence[int] = (64, 64)
     activation: str = "tanh"
@@ -123,7 +117,6 @@ class LinearCombination(nn.Module):
         even = ParityEven(self.hidden, self.activation)(x)
         odd_net = ParityOdd(self.hidden, self.activation)(x)
         alpha = self.param("alpha", nn.initializers.zeros, ())
-        # log|ψ| for the combination — used only when we know signs don't flip
         a = jnp.exp(even)
         b = jnp.sign(x.squeeze(-1) + 1e-30) * jnp.exp(odd_net)
         psi = a + jnp.exp(alpha) * b

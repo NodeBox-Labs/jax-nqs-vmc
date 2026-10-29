@@ -56,12 +56,13 @@ def run_seed(cfg: RunConfig, seed: int, outdir: Path) -> dict:
     state = train(logpsi, params, system, cfg, seed, ortho_ref, outdir=outdir, verbose=True)
 
     # Build summary metrics dict
-    metrics: dict = {
+    metrics = {
         "seed": seed,
-        "final_energy": state.history["energy"][-1],
-        "final_variance": state.history["variance"][-1],
-        "final_acceptance": state.history["acceptance"][-1],
-        "tau_int": state.history["tau_int"][-1],
+        "final_energy": state.history["energy"][-1] if state.history["energy"] else float("nan"),
+        "final_variance": state.history["variance"][-1] if state.history["variance"] else float("nan"),
+        "final_acceptance": state.history["acceptance"][-1] if state.history["acceptance"] else 0.0,
+        "tau_int": state.history["tau_int"][-1] if state.history["tau_int"] else 0.0,
+        "wall_time_s": sum(state.history["wall_time"]),
     }
 
     ref = get_reference(cfg)

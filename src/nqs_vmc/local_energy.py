@@ -32,7 +32,7 @@ def make_local_energy(
         lap = hess if dim == 1 else jnp.trace(hess)
             
         kinetic = -0.5 * (lap + jnp.sum(grad * grad))
-        e = kinetic + potential_fn(xi.reshape(1, dim))[0]
+        e = kinetic + jnp.sum(potential_fn(xi.reshape(1, dim)))
         
         if g != 0.0:
             log_psi2 = 2.0 * logpsi_scalar(xi)

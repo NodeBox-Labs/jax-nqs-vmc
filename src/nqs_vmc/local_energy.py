@@ -19,30 +19,30 @@ def make_local_energy(
     potential_fn: Callable[[jnp.ndarray], jnp.ndarray],
     g: float = 0.0,
 ) -> Callable[[dict, jnp.ndarray], jnp.ndarray]:
-    """Return ``local_energy(params, x)`` of shape ``(N,)``:
-
-        H ψ / ψ = -½ tr(Hess log ψ) - ½ |∇ log ψ|² + V(x) + g |ψ|²
-
-    The ``g |ψ|²`` term is included only when ``g != 0``. Its argument is
-    clamped in the log domain to prevent overflow from early-training blowups.
-    """
 
     def _single(params, xi):
-        def logpsi_scalar(flat):
-            return logpsi_fn(params, flat.reshape(1, -1))[0]
+        dim = xi.shape[0]
+        
+        def logpsi_scalar(x_flat):
+            return logpsi_fn(params, x_flat.reshape(1, dim))[0]
 
         grad = jax.grad(logpsi_scalar)(xi)
         hess = jax.hessian(logpsi_scalar)(xi)
-        kinetic = -0.5 * (jnp.trace(hess) + jnp.sum(grad * grad))
-        e = kinetic + potential_fn(xi.reshape(1, -1))[0]
+        
+        # If dim == 1, the Hessian is a scalar. jnp.trace fails on scalars.
+        lap = hess if dim == 1 else jnp.trace(hess)
+            
+        kinetic = -0.5 * (lap + jnp.sum(grad * grad))
+        e = kinetic + potential_fn(xi.reshape(1, dim))[0]
+        
         if g != 0.0:
             log_psi2 = 2.0 * logpsi_scalar(xi)
-            log_psi2 = jnp.clip(log_psi2, max=_LOG_SQ_CLAMP)
+            log_psi2 = jnp.clip(log_psi2, max=60.0)
             e = e + g * jnp.exp(log_psi2)
         return e
 
-    return jax.vmap(lambda p, xb: jax.vmap(lambda xi: _single(p, xi))(xb),
-                    in_axes=(None, 0))
+    return jax.vmap(lambda p, xb: jax.vmap(lambda xi: _single(p, xi))(xb), in_axes=(None, 0))
+
 
 
 def energy_and_variance(

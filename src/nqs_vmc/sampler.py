@@ -50,13 +50,18 @@ def sample(
     )
 
     def burn(c, _):
-        return _mh_step(logpsi_fn, params, c, target_accept, adapt_rate), None
+        # Return the NEW state as the carry
+        new_c = _mh_step(logpsi_fn, params, c, target_accept, adapt_rate)
+        return new_c, None
+
     def prod(c, _):
-        c = _mh_step(logpsi_fn, params, c, target_accept, adapt_rate)
-        return c, c.x
+        # Return the NEW state as the carry, and the positions as output
+        new_c = _mh_step(logpsi_fn, params, c, target_accept, adapt_rate)
+        return new_c, new_c.x
 
     if burn_in > 0:
         state, _ = jax.lax.scan(burn, state, None, length=burn_in)
+    
     state, traj = jax.lax.scan(prod, state, None, length=n_sweeps)
     return traj.reshape(-1, traj.shape[-1]), state
 

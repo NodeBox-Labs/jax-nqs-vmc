@@ -1,21 +1,17 @@
-"""Metropolis–Hastings with adaptive step size and Sokal autocorrelation.
-
-The sampler is a pure function of (logψ, params, x0, key). All randomness
-comes from ``key``; there is no global RNG. The full sampling loop is jitted
-once per (logψ, params shape); shape-locked via ``donate_argnums``.
-"""
+"""Metropolis–Hastings with adaptive step size."""
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Callable, Tuple
 
 import jax
 import jax.numpy as jnp
 
-from . import jax_config  # noqa: F401 — enables x64
+from . import jax_config  # noqa: F401
 
-
+# CRITICAL for JAX 0.4.26: dataclasses must be registered as pytrees to work in lax.scan
+@jax.tree_util.register_dataclass
 @dataclass
 class SamplerState:
     x: jnp.ndarray
@@ -24,8 +20,7 @@ class SamplerState:
     key: jnp.ndarray
 
 
-def _mh_step(logpsi_fn, params, state: SamplerState,
-             target_accept: float, adapt_rate: float) -> SamplerState:
+def _mh_step(logpsi_fn, params, state: SamplerState, target_accept: float, adapt_rate: float) -> SamplerState:
     key, k_prop, k_u = jax.random.split(state.key, 3)
     proposal = state.x + state.step_size * jax.random.normal(k_prop, state.x.shape)
     log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, state.x))
@@ -46,13 +41,7 @@ def sample(
     target_accept: float,
     burn_in: int,
     adapt_rate: float,
-) -> tuple[jnp.ndarray, SamplerState]:
-    """Return ``(samples, final_state)``.
-
-    ``samples`` has shape ``(n_sweeps * n_chains, dim)`` — one row per walker
-    per sweep, flattened. ``final_state`` carries the adapted step size and
-    running acceptance rate for the next call.
-    """
+) -> Tuple[jnp.ndarray, SamplerState]:
     state = SamplerState(
         x=x0,
         step_size=jnp.asarray(step_size, dtype=jnp.float64),
@@ -62,7 +51,6 @@ def sample(
 
     def burn(c, _):
         return _mh_step(logpsi_fn, params, c, target_accept, adapt_rate), None
-
     def prod(c, _):
         c = _mh_step(logpsi_fn, params, c, target_accept, adapt_rate)
         return c, c.x
@@ -74,18 +62,14 @@ def sample(
 
 
 def integrated_autocorr_time(values: jnp.ndarray, c: float = 5.0) -> jnp.ndarray:
-    """Sokal's automatic-windowing estimator for the integrated autocorrelation
-    time. Returns a scalar jnp array."""
     values = jnp.asarray(values)
     x = values - jnp.mean(values)
     var = jnp.mean(x * x)
     var = jnp.where(var < 1e-30, 1e-30, var)
     n = values.shape[0]
     max_lag = min(n // 2, 2000)
-
     def acf(lag):
         return jnp.sum(x[: n - lag] * x[lag:]) / ((n - lag) * var)
-
     acfs = jax.vmap(acf)(jnp.arange(max_lag))
     tau = 1.0 + 2.0 * jnp.cumsum(acfs)
     m = jnp.arange(max_lag) + 1

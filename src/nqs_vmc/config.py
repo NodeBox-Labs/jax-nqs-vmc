@@ -37,8 +37,8 @@ class AnsatzConfig:
 
     def __post_init__(self) -> None:
         _require(
-            self.type in ("mlp", "even", "odd", "deepsets"),
-            f"ansatz.type must be mlp|even|odd|deepsets; got {self.type!r}.",
+            self.type in ("mlp", "even", "odd", "deepsets", "combo", "autoregressive", "transformer"),
+            f"ansatz.type must be mlp|even|odd|deepsets|combo|autoregressive|transformer; got {self.type!r}.",
         )
         self.hidden = _as_tuple(self.hidden, "ansatz.hidden")
         self.pair_hidden = _as_tuple(self.pair_hidden, "ansatz.pair_hidden")
@@ -85,7 +85,10 @@ class OptimizerConfig:
     schedule: str = "constant"  # constant | cosine
 
     def __post_init__(self) -> None:
-        _require(self.name in ("adam", "sr"), f"optimizer.name must be adam|sr; got {self.name!r}.")
+        _require(
+            self.name in ("adam", "sr", "minsr"),
+            f"optimizer.name must be adam|sr|minsr; got {self.name!r}.",
+        )
         _require(self.lr > 0.0, "optimizer.lr must be > 0.")
         _require(self.n_iter > 0, "optimizer.n_iter must be > 0.")
         _require(self.diag_shift > 0.0, "optimizer.diag_shift must be > 0.")

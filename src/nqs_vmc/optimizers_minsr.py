@@ -40,32 +40,37 @@ def _cg_solve(
 
 
 class MatrixFreeSR:
-    def __init__(self, lr: float = 0.05, diag_shift: float = 1e-3, max_iter: int = 100):
+    """Matrix-Free Stochastic Reconfiguration using Conjugate Gradient."""
+
+    def __init__(
+        self, lr: float = 0.05, diag_shift: float = 1e-3, max_iter: int = 100
+    ):
         self.lr = lr
         self.diag_shift = diag_shift
         self.max_iter = max_iter
 
     def init(self, params: dict) -> None:
+        """Initialize optimizer state (none needed for MinSR)."""
         return None
 
-    def update(self, params, state, S_F):
+    def update(self, params: dict, state: None, S_F: tuple) -> tuple[dict, None]:
+        """Perform one update step."""
         # Here, S_F is not a matrix. It is (O, F) where O is shape (N, P)
         # and F is shape (P,).
-        O, F = S_F  # noqa: E741
+        jacobian, F = S_F
 
-        # O is the Jacobian: O_{i, \theta} = \partial \log \psi(x_i) / \partial \theta
-        O_centered = O - jnp.mean(O, axis=0)
+        # jacobian is shape (N, P), F is shape (P,)
+        jacobian_centered = jacobian - jnp.mean(jacobian, axis=0)
         F_centered = F - jnp.mean(F)
 
-        # S is implicitly defined. S * v = (O^T (O v)) / N + diag_shift * v
-        n_samples = O.shape[0]
+        n_samples = jacobian.shape[0]
 
         def matvec(v):
-            Ov = jnp.dot(O_centered, v)
-            return jnp.dot(O_centered.T, Ov) / n_samples + self.diag_shift * v
+            jv = jnp.dot(jacobian_centered, v)
+            return jnp.dot(jacobian_centered.T, jv) / n_samples + self.diag_shift * v
 
         # Solve S delta = F
-        b = jnp.dot(O_centered.T, F_centered) / n_samples
+        b = jnp.dot(jacobian_centered.T, F_centered) / n_samples
         delta = _cg_solve(matvec, b, jnp.zeros_like(b), max_iter=self.max_iter)
 
         # Apply update

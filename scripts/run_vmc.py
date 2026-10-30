@@ -8,6 +8,7 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from nqs_vmc.ansatz import build_ansatz
 from nqs_vmc.config import RunConfig

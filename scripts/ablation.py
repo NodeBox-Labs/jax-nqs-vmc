@@ -4,14 +4,15 @@ import argparse
 from pathlib import Path
 
 import pandas as pd
-from nqs_vmc.config import RunConfig
 from run_vmc import run_seed
+
+from nqs_vmc.config import RunConfig
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", type=str, default="configs/ho_ground.yaml")
-    args = ap.parse_args()
+    ap.parse_args()  # Use _ if you don't need args, but args is unused so just call it
 
     ansatze = ["even", "transformer"]
     optimizers = ["adam", "minsr"]

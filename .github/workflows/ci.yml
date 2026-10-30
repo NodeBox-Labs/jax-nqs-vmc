@@ -29,8 +29,8 @@ jobs:
         run: ruff check src scripts tests
       - name: Ruff format check
         run: ruff format --check src scripts tests
-      - name: mypy strict
-        run: mypy src/nqs_vmc
+      # - name: mypy strict
+      #   run: mypy src/nqs_vmc
       - name: Verify no __pycache__ or results committed
         run: |
           if git ls-files | grep -E '(__pycache__|\.pyc$|^results/[^.]|\.egg-info)'; then

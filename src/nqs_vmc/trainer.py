@@ -110,11 +110,12 @@ def train(
         E, Var, stderr = energy_and_variance(e_loc, tau_int=tau)
 
         if cfg.optimizer.name == "adam":
-            def loss_fn(p):
-                base = jnp.mean(local_energy(p, samples))
+
+            def loss_fn(p, s=samples):
+                base = jnp.mean(local_energy(p, s))
                 if ortho_ref is not None and cfg.excited.penalty > 0:
                     base = base + cfg.excited.penalty * overlap_squared(
-                        logpsi_fn, p, ortho_ref, samples
+                        logpsi_fn, p, ortho_ref, s
                     )
                 return base
 

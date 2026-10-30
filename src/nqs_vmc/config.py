@@ -1,10 +1,3 @@
-"""Typed configuration with cross-field validation.
-
-Every constraint in this module is either (a) checked in ``__post_init__``, or
-(b) checked in :meth:`RunConfig.validate`. There is no constraint enforced
-only by documentation.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -150,17 +143,27 @@ class RunConfig:
     seeds: tuple[int, ...] = (0, 1, 2)
 
     def __post_init__(self) -> None:
+        valid_systems = (
+            "harmonic",
+            "harmonic2d",
+            "double_well",
+            "gpe",
+            "two_bosons",
+            "three_bosons",
+        )
         _require(
-            self.system in ("harmonic", "harmonic2d", "double_well", "gpe", "two_bosons", "three_bosons"),
-            f"system must be harmonic|harmonic2d|double_well|gpe|two_bosons|three_bosons; got {self.system!r}.",
+            self.system in valid_systems,
+            f"system must be one of {valid_systems}; got {self.system!r}.",
         )
         _require(self.dim >= 1, "dim must be >= 1.")
         _require(len(self.seeds) > 0, "seeds must be non-empty.")
         for s in self.seeds:
-            _require(isinstance(s, int) and s >= 0, f"seeds must be non-negative ints; got {s!r}.")
+            _require(
+                isinstance(s, int) and s >= 0,
+                f"seeds must be non-negative ints; got {s!r}.",
+            )
         self.seeds = tuple(int(s) for s in self.seeds)
-        
-        # DeepSets cusp must equal g
+
         if self.ansatz.type == "deepsets":
             _require(
                 abs(self.ansatz.cusp - self.g) < 1e-8,

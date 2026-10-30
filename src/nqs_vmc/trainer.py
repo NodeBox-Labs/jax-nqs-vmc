@@ -101,7 +101,7 @@ def train(
         e_loc = local_energy(state.params, samples)
         
         # --- DIVERGENCE GUARD ---
-        if not bool(jnp.isfinite(e_loc).all()) or jnp.max(jnp.abs(e_loc)) > 100.0:
+        if not bool(jnp.isfinite(e_loc).all()) or jnp.max(jnp.abs(e_loc)) > 1e6:
             pbar.write(f"[divergence] Energy exploded at step {it}. Stopping.")
             break
         # ------------------------

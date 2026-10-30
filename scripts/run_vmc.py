@@ -56,25 +56,30 @@ def run_seed(cfg: RunConfig, seed: int, outdir: Path) -> dict:
     state = train(logpsi, params, system, cfg, seed, ortho_ref, outdir=outdir, verbose=True)
 
     # Build summary metrics dict
+    final_energy = state.history["energy"][-1] if state.history["energy"] else float("nan")
+    final_variance = state.history["variance"][-1] if state.history["variance"] else float("nan")
+    final_acceptance = state.history["acceptance"][-1] if state.history["acceptance"] else 0.0
+    tau_int = state.history["tau_int"][-1] if state.history["tau_int"] else 0.0
+
     metrics = {
         "seed": seed,
-        "final_energy": state.history["energy"][-1] if state.history["energy"] else float("nan"),
-        "final_variance": state.history["variance"][-1] if state.history["variance"] else float("nan"),
-        "final_acceptance": state.history["acceptance"][-1] if state.history["acceptance"] else 0.0,
-        "tau_int": state.history["tau_int"][-1] if state.history["tau_int"] else 0.0,
+        "final_energy": final_energy,
+        "final_variance": final_variance,
+        "final_acceptance": final_acceptance,
+        "tau_int": tau_int,
         "wall_time_s": sum(state.history["wall_time"]),
     }
-
-    ref = get_reference(cfg)
-    if ref is not None:
-        ref_vals, ref_x, ref_vecs = ref
-        idx = cfg.excited.level
-        metrics["reference_energy"] = float(ref_vals[idx])
-        metrics["energy_error"] = float(state.history["energy"][-1] - ref_vals[idx])
-        metrics["fidelity"] = fidelity_from_grid(
-            logpsi, state.params, jnp.asarray(ref_x), ref_vecs[:, idx]
-        )
-
+    if cfg.system in ("harmonic", "double_well"):
+        if ref is None:
+            ref = system.reference(cfg.reference)
+        vals, xs, vecs = ref
+        level = cfg.excited.level
+        metrics["reference_energy"] = float(vals[level])
+        if not np.isnan(final_energy):
+            metrics["energy_error"] = float(final_energy - vals[level])
+            metrics["fidelity"] = fidelity_from_grid(
+                logpsi, state.params, jnp.asarray(xs), vecs[:, level]
+            )
     save_results(outdir, metrics, state.history)
 
     from nqs_vmc.plotting import plot_convergence

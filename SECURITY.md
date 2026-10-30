@@ -7,7 +7,7 @@ Only the latest release of `nqs-vmc` is actively supported with security updates
 | Version | Supported          |
 | ------- | ------------------ |
 | 0.4.x   | :white_check_mark: |
-| < 0.4   | :x:                |
+| < 0.2   | :x:                |
 
 ## Reporting a Vulnerability
 

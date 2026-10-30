@@ -50,6 +50,10 @@ def sample(
         # Propose
         noise = jax.random.normal(k_prop, x.shape, dtype=jnp.float64)
         proposal = x + sigma * noise
+        
+        # REJECT moves that go too far (prevents flat wavefunction explosion)
+        is_valid = jnp.abs(proposal) < 20.0
+        proposal = jnp.where(is_valid, proposal, x)
 
         # Acceptance probability
         log_ratio = 2.0 * (logpsi_fn(params, proposal) - logpsi_fn(params, x))

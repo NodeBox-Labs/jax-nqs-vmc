@@ -40,9 +40,7 @@ class MLP(nn.Module):
         h = x
         for width in self.hidden:
             h = act(nn.Dense(width)(h))
-        # Initialize the final layer to zero. This is critical for VMC:
-        # it ensures the initial wavefunction is flat, preventing the kinetic 
-        # energy from exploding at step 0.
+        # Zero init the output layer
         return nn.Dense(1, kernel_init=nn.initializers.zeros)(h).squeeze(-1)
 
 

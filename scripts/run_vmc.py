@@ -69,17 +69,26 @@ def run_seed(cfg: RunConfig, seed: int, outdir: Path) -> dict:
         "tau_int": tau_int,
         "wall_time_s": sum(state.history["wall_time"]),
     }
-    if cfg.system in ("harmonic", "double_well"):
-        if ref is None:
-            ref = system.reference(cfg.reference)
-        vals, xs, vecs = ref
-        level = cfg.excited.level
-        metrics["reference_energy"] = float(vals[level])
-        if not np.isnan(final_energy):
-            metrics["energy_error"] = float(final_energy - vals[level])
-            metrics["fidelity"] = fidelity_from_grid(
-                logpsi, state.params, jnp.asarray(xs), vecs[:, level]
-            )
+
+    # Always fetch the reference for analytical systems
+    ref = None
+    if cfg.system in ("harmonic", "double_well", "harmonic2d"):
+        ref = system.reference(cfg.reference)
+
+    if ref is not None:
+        if cfg.system in ("harmonic", "double_well"):
+            vals, xs, vecs = ref
+            level = cfg.excited.level
+            metrics["reference_energy"] = float(vals[level])
+            if not np.isnan(final_energy):
+                metrics["energy_error"] = float(final_energy - vals[level])
+                metrics["fidelity"] = fidelity_from_grid(
+                    logpsi, state.params, jnp.asarray(xs), vecs[:, level]
+                )
+        elif cfg.system == "harmonic2d":
+            metrics["reference_energy"] = 1.0
+            if not np.isnan(final_energy):
+                metrics["energy_error"] = float(final_energy - 1.0)
     save_results(outdir, metrics, state.history)
 
     from nqs_vmc.plotting import plot_convergence

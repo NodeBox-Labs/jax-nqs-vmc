@@ -31,14 +31,16 @@ def main() -> None:
                     )
                     outdir = Path(f"results/abl_{ansatz_type}_{opt}_{w}_{seed}")
                     m = run_seed(cfg, seed, outdir)
-                    results.append({
-                        "ansatz": ansatz_type,
-                        "optimizer": opt,
-                        "width": w,
-                        "seed": seed,
-                        "energy": m["final_energy"],
-                        "variance": m["final_variance"],
-                    })
+                    results.append(
+                        {
+                            "ansatz": ansatz_type,
+                            "optimizer": opt,
+                            "width": w,
+                            "seed": seed,
+                            "energy": m["final_energy"],
+                            "variance": m["final_variance"],
+                        }
+                    )
 
     df = pd.DataFrame(results)
     summary = (

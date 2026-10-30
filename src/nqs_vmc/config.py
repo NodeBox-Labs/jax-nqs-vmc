@@ -30,8 +30,13 @@ class AnsatzConfig:
 
     def __post_init__(self) -> None:
         valid_types = (
-            "mlp", "even", "odd", "deepsets", "combo",
-            "autoregressive", "transformer",
+            "mlp",
+            "even",
+            "odd",
+            "deepsets",
+            "combo",
+            "autoregressive",
+            "transformer",
         )
         _require(
             self.type in valid_types,

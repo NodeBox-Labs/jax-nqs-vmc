@@ -42,9 +42,7 @@ def _cg_solve(
 class MatrixFreeSR:
     """Matrix-Free Stochastic Reconfiguration using Conjugate Gradient."""
 
-    def __init__(
-        self, lr: float = 0.05, diag_shift: float = 1e-3, max_iter: int = 100
-    ):
+    def __init__(self, lr: float = 0.05, diag_shift: float = 1e-3, max_iter: int = 100):
         self.lr = lr
         self.diag_shift = diag_shift
         self.max_iter = max_iter

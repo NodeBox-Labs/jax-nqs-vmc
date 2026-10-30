@@ -83,7 +83,7 @@ def train(
     for it in pbar:
         t0 = time.time()
         key, k_samp = jax.random.split(key)
-        
+
         samples, s_state = sample(
             logpsi_fn,
             state.params,
@@ -99,7 +99,7 @@ def train(
         step_size = float(s_state.step_size)
 
         e_loc = local_energy(state.params, samples)
-        
+
         # --- DIVERGENCE GUARD ---
         if not bool(jnp.isfinite(e_loc).all()) or jnp.max(jnp.abs(e_loc)) > 1e6:
             pbar.write(f"[divergence] Energy exploded at step {it}. Stopping.")
@@ -114,9 +114,7 @@ def train(
             def loss_fn(p, s=samples):
                 base = jnp.mean(local_energy(p, s))
                 if ortho_ref is not None and cfg.excited.penalty > 0:
-                    base = base + cfg.excited.penalty * overlap_squared(
-                        logpsi_fn, p, ortho_ref, s
-                    )
+                    base = base + cfg.excited.penalty * overlap_squared(logpsi_fn, p, ortho_ref, s)
                 return base
 
             grads = jax.grad(loss_fn)(state.params)
@@ -126,7 +124,7 @@ def train(
             S, F = quantum_geometric_tensor(logpsi_fn, state.params, samples, e_loc)
             new_params, state.opt_state = opt.update(state.params, state.opt_state, (S, F))
             gn = jnp.linalg.norm(F)
-            
+
         state.params = new_params
 
         # Save history
@@ -154,7 +152,7 @@ def train(
                     "wall_time": time.time() - t0,
                 }
             )
-            
+
         if checkpoint_every > 0 and outdir is not None and (it + 1) % checkpoint_every == 0:
             save_ckpt(outdir / "checkpoint", state.params, it + 1)
 
